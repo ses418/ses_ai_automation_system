@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { X, User, Mail, Lock, Phone, Building2, MapPin, FolderOpen } from 'lucide-react';
+import { X, User, Mail, Lock, Phone, Building2, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface AddMemberModalProps {
@@ -22,7 +22,6 @@ interface FormData {
   department: string;
   role: string;
   location: string;
-  project: string;
 }
 
 const AddMemberModal: React.FC<AddMemberModalProps> = ({
@@ -38,14 +37,12 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
     phone: '',
     department: '',
     role: '',
-    location: '',
-    project: ''
+    location: ''
   });
   const [isLoading, setIsLoading] = useState(false);
 
   const departments = ['Engineering', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations'];
   const roles = ['Engineer', 'Manager', 'HOD', 'Head of SES', 'Staff', 'Intern'];
-  const projects = ['Project Alpha', 'Project Beta', 'Project Gamma', 'Project Delta', 'Project Echo'];
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({
@@ -73,22 +70,8 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
     setIsLoading(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Create new member object
-      const newMember = {
-        id: Date.now().toString(),
-        ...formData,
-        status: 'active' as const,
-        dashboardAccess: 'visible' as const,
-        dateAdded: new Date().toISOString().split('T')[0],
-        lastLogin: 'Never',
-        isAdmin: formData.role === 'Head of SES'
-      };
-
-      // Call the callback to add the member
-      onMemberAdded(newMember);
+      // Call the callback to add the member with the form data
+      onMemberAdded(formData);
       
       // Show success message
       toast({
@@ -105,8 +88,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
         phone: '',
         department: '',
         role: '',
-        location: '',
-        project: ''
+        location: ''
       });
       
     } catch (error) {
@@ -130,8 +112,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
         phone: '',
         department: '',
         role: '',
-        location: '',
-        project: ''
+        location: ''
       });
     }
   };
@@ -296,25 +277,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({
                 </div>
               </div>
 
-              {/* Project */}
-              <div className="space-y-2">
-                <Label htmlFor="project" className="text-sm font-medium">
-                  Project
-                </Label>
-                <div className="relative">
-                  <FolderOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Select value={formData.project} onValueChange={(value) => handleInputChange('project', value)}>
-                    <SelectTrigger className="pl-10 bg-white/50 border-white/30 focus:bg-white focus:border-[#1473B9]">
-                      <SelectValue placeholder="Select project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map(project => (
-                        <SelectItem key={project} value={project}>{project}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+
             </div>
           </div>
 

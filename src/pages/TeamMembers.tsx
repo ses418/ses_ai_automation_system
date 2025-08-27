@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AddMemberModal from '@/components/AddMemberModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,94 +34,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import PageHeader from '@/components/ui/PageHeader';
-
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  role: 'admin' | 'manager' | 'staff';
-  department: string;
-  status: 'active' | 'inactive' | 'pending';
-  dashboardAccess: 'visible' | 'hidden';
-  profilePicture: string;
-  dateAdded: string;
-  lastLogin: string;
-  isAdmin: boolean;
-}
-
-const mockTeamMembers: TeamMember[] = [
-  {
-    id: '1',
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@ses.com',
-    phone: '+1 (555) 123-4567',
-    role: 'admin',
-    department: 'Executive',
-    status: 'active',
-    dashboardAccess: 'visible',
-    profilePicture: '/avatars/sarah.jpg',
-    dateAdded: '2024-01-15',
-    lastLogin: '2024-01-20 14:30',
-    isAdmin: true
-  },
-  {
-    id: '2',
-    name: 'Michael Chen',
-    email: 'michael.chen@ses.com',
-    phone: '+1 (555) 234-5678',
-    role: 'manager',
-    department: 'Engineering',
-    status: 'active',
-    dashboardAccess: 'visible',
-    profilePicture: '/avatars/michael.jpg',
-    dateAdded: '2024-01-10',
-    lastLogin: '2024-01-20 09:15',
-    isAdmin: false
-  },
-  {
-    id: '3',
-    name: 'Emily Rodriguez',
-    email: 'emily.rodriguez@ses.com',
-    phone: '+1 (555) 345-6789',
-    role: 'staff',
-    department: 'Marketing',
-    status: 'active',
-    dashboardAccess: 'visible',
-    profilePicture: '/avatars/emily.jpg',
-    dateAdded: '2024-01-08',
-    lastLogin: '2024-01-19 16:45',
-    isAdmin: false
-  },
-  {
-    id: '4',
-    name: 'David Kim',
-    email: 'david.kim@ses.com',
-    phone: '+1 (555) 456-7890',
-    role: 'staff',
-    department: 'Sales',
-    status: 'inactive',
-    dashboardAccess: 'hidden',
-    profilePicture: '/avatars/david.jpg',
-    dateAdded: '2024-01-05',
-    lastLogin: '2024-01-15 11:20',
-    isAdmin: false
-  },
-  {
-    id: '5',
-    name: 'Lisa Thompson',
-    email: 'lisa.thompson@ses.com',
-    phone: '+1 (555) 567-8901',
-    role: 'manager',
-    department: 'HR',
-    status: 'pending',
-    dashboardAccess: 'hidden',
-    profilePicture: '/avatars/lisa.jpg',
-    dateAdded: '2024-01-22',
-    lastLogin: 'Never',
-    isAdmin: false
-  }
-];
+import { TeamMembersService } from '@/services/teamMembersService';
+import { TeamMember, TeamMemberFilters } from '@/types/team-members';
 
 export default function TeamMembers() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -133,30 +47,48 @@ export default function TeamMembers() {
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [currentUser] = useState({ isAdmin: true }); // Mock current user
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [filteredTeamMembers, setFilteredTeamMembers] = useState<TeamMember[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const { toast } = useToast();
 
-  const filteredMembers = mockTeamMembers.filter(member => {
-    const matchesSearch = 
-      member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.department.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = roleFilter === 'all' || member.role === roleFilter;
-    const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
-    const matchesAccess = accessFilter === 'all' || member.dashboardAccess === accessFilter;
-    
-    return matchesSearch && matchesRole && matchesStatus && matchesAccess;
-  });
+  // Load team members from Supabase
+  useEffect(() => {
+    const loadTeamMembers = async () => {
+      try {
+        setIsInitialLoading(true);
+        console.log('Loading team members from Supabase...');
+        const members = await TeamMembersService.getTeamMembers();
+        console.log('Team members loaded:', members);
+        setTeamMembers(members);
+        setFilteredTeamMembers(members);
+      } catch (error) {
+        console.error('Error loading team members:', error);
+        toast({
+          title: "Error",
+          description: `Failed to load team members: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: "destructive"
+        });
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
 
-  const sortedMembers = [...filteredMembers].sort((a, b) => {
+    loadTeamMembers();
+  }, [toast]);
+
+  // Apply sorting to filtered members
+  const sortedMembers = [...filteredTeamMembers].sort((a, b) => {
     switch (sortBy) {
       case 'name':
         return a.name.localeCompare(b.name);
       case 'dateAdded':
-        return new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime();
+        return new Date(b.date_added).getTime() - new Date(a.date_added).getTime();
       case 'role':
-        return a.role.localeCompare(b.role);
+        return (a.role || '').localeCompare(b.role || '');
       case 'department':
-        return a.department.localeCompare(b.department);
+        return (a.department || '').localeCompare(b.department || '');
       default:
         return 0;
     }
@@ -182,19 +114,25 @@ export default function TeamMembers() {
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'admin': return 'bg-purple-500';
-      case 'manager': return 'bg-blue-500';
-      case 'staff': return 'bg-gray-500';
+      case 'Head of SES': return 'bg-purple-500';
+      case 'Manager': return 'bg-blue-500';
+      case 'HOD': return 'bg-indigo-500';
+      case 'Engineer': return 'bg-green-500';
+      case 'Staff': return 'bg-gray-500';
+      case 'Intern': return 'bg-orange-500';
       default: return 'bg-gray-500';
     }
   };
 
   const getRoleText = (role: string) => {
     switch (role) {
-      case 'admin': return 'Admin';
-      case 'manager': return 'Manager';
-      case 'staff': return 'Staff';
-      default: return 'Unknown';
+      case 'Head of SES': return 'Admin';
+      case 'Manager': return 'Manager';
+      case 'HOD': return 'HOD';
+      case 'Engineer': return 'Engineer';
+      case 'Staff': return 'Staff';
+      case 'Intern': return 'Intern';
+      default: return role || 'Unknown';
     }
   };
 
@@ -219,6 +157,8 @@ export default function TeamMembers() {
     console.log(`Action ${action} on member ${memberId}`);
   };
 
+
+
   const toggleMemberSelection = (memberId: string) => {
     setSelectedMembers(prev => 
       prev.includes(memberId) 
@@ -227,33 +167,62 @@ export default function TeamMembers() {
     );
   };
 
-  const handleAddMember = (newMember?: any) => {
-    if (newMember) {
-      // Add the new member to the mock data
-      mockTeamMembers.unshift(newMember);
-      // In a real app, this would be an API call
-      console.log('New member added:', newMember);
-    } else {
-      // Opening Add Member modal
-      console.log('Opening Add Member modal');
-      // Here you would typically open a modal or navigate to an add member form
+  const handleAddMember = async (memberData: any) => {
+    try {
+      setIsLoading(true);
+      console.log('Adding new team member:', memberData);
+      
+      // Create the new team member using the service
+      const newMember = await TeamMembersService.createTeamMember({
+        name: memberData.name,
+        email: memberData.email,
+        password: memberData.password,
+        phone: memberData.phone,
+        department: memberData.department,
+        role: memberData.role,
+        location: memberData.location
+      });
+      
+      console.log('New member created:', newMember);
+      
+      // Refresh the team members list
+      const updatedMembers = await TeamMembersService.getTeamMembers();
+      console.log('Updated members list:', updatedMembers);
+      setTeamMembers(updatedMembers);
+      setFilteredTeamMembers(updatedMembers);
+      
+      toast({
+        title: "Success",
+        description: "Team member added successfully!"
+      });
+      
+      setIsAddMemberModalOpen(false);
+    } catch (error) {
+      console.error('Error adding team member:', error);
+      toast({
+        title: "Error",
+        description: `Failed to add team member: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const selectAllMembers = () => {
-    if (selectedMembers.length === filteredMembers.length) {
+    if (selectedMembers.length === filteredTeamMembers.length) {
       setSelectedMembers([]);
     } else {
-      setSelectedMembers(filteredMembers.map(m => m.id));
+      setSelectedMembers(filteredTeamMembers.map(m => m.id));
     }
   };
 
   const stats = {
-    total: mockTeamMembers.length,
-    active: mockTeamMembers.filter(m => m.status === 'active').length,
-    inactive: mockTeamMembers.filter(m => m.status === 'inactive').length,
-    pending: mockTeamMembers.filter(m => m.status === 'pending').length,
-    admins: mockTeamMembers.filter(m => m.role === 'admin').length
+    total: teamMembers.length,
+    active: teamMembers.filter(m => m.status === 'active').length,
+    inactive: teamMembers.filter(m => m.status === 'inactive').length,
+    pending: teamMembers.filter(m => m.status === 'pending').length,
+    admins: teamMembers.filter(m => m.is_admin).length
   };
 
   const handleExportList = () => {
@@ -383,9 +352,12 @@ export default function TeamMembers() {
                 className="px-3 py-2 bg-white/50 border border-white/30 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">All Roles</option>
-                <option value="admin">Admin</option>
-                <option value="manager">Manager</option>
-                <option value="staff">Staff</option>
+                <option value="Head of SES">Head of SES</option>
+                <option value="Manager">Manager</option>
+                <option value="HOD">HOD</option>
+                <option value="Engineer">Engineer</option>
+                <option value="Staff">Staff</option>
+                <option value="Intern">Intern</option>
               </select>
 
               <select
@@ -458,7 +430,7 @@ export default function TeamMembers() {
                   onClick={selectAllMembers}
                   className="text-blue-700 hover:bg-blue-100"
                 >
-                  {selectedMembers.length === filteredMembers.length ? 'Deselect All' : 'Select All'}
+                  {selectedMembers.length === filteredTeamMembers.length ? 'Deselect All' : 'Select All'}
                 </Button>
               </div>
               
@@ -496,8 +468,22 @@ export default function TeamMembers() {
         </Card>
       )}
 
+      {/* Loading State */}
+      {isInitialLoading && (
+        <Card className="bg-white/70 backdrop-blur-md border-white/20 shadow-lg mb-6">
+          <CardContent className="p-8">
+            <div className="flex items-center justify-center space-x-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="text-gray-600">Loading team members...</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Team Members Display */}
-      {viewMode === 'table' ? (
+      {!isInitialLoading && (
+        <>
+          {viewMode === 'table' ? (
         /* Table View */
         <Card className="bg-white/70 backdrop-blur-md border-white/20 shadow-lg">
           <CardContent className="p-0">
@@ -508,7 +494,7 @@ export default function TeamMembers() {
                     <th className="p-4 text-left">
                       <input
                         type="checkbox"
-                        checked={selectedMembers.length === filteredMembers.length && filteredMembers.length > 0}
+                        checked={selectedMembers.length === filteredTeamMembers.length && filteredTeamMembers.length > 0}
                         onChange={selectAllMembers}
                         className="rounded border-gray-300"
                       />
@@ -537,7 +523,7 @@ export default function TeamMembers() {
                       <td className="p-4">
                         <div className="flex items-center space-x-3">
                           <Avatar className="w-10 h-10">
-                            <AvatarImage src={member.profilePicture} />
+                            <AvatarImage src={member.profile_picture} />
                             <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
                               {member.name.split(' ').map(n => n[0]).join('')}
                             </AvatarFallback>
@@ -549,11 +535,11 @@ export default function TeamMembers() {
                         </div>
                       </td>
                       <td className="p-4">
-                        <Badge className={`${getRoleColor(member.role)} text-white`}>
-                          {getRoleText(member.role)}
+                        <Badge className={`${getRoleColor(member.role || '')} text-white`}>
+                          {getRoleText(member.role || '')}
                         </Badge>
                       </td>
-                      <td className="p-4 text-gray-700">{member.department}</td>
+                      <td className="p-4 text-gray-700">{member.department || 'Unassigned'}</td>
                       <td className="p-4">
                         <div className="space-y-1">
                           <div className="flex items-center space-x-2 text-sm">
@@ -562,7 +548,7 @@ export default function TeamMembers() {
                           </div>
                           <div className="flex items-center space-x-2 text-sm">
                             <Phone className="w-4 h-4 text-gray-400" />
-                            <span className="text-gray-700">{member.phone}</span>
+                            <span className="text-gray-700">{member.phone || 'No phone'}</span>
                           </div>
                         </div>
                       </td>
@@ -573,22 +559,24 @@ export default function TeamMembers() {
                       </td>
                       <td className="p-4">
                         <div className="flex items-center space-x-2">
-                          {member.dashboardAccess === 'visible' ? (
+                          {member.dashboard_access === 'visible' ? (
                             <Eye className="w-4 h-4 text-green-600" />
                           ) : (
                             <EyeOff className="w-4 h-4 text-gray-400" />
                           )}
                           <span className="text-sm text-gray-700 capitalize">
-                            {member.dashboardAccess}
+                            {member.dashboard_access}
                           </span>
                         </div>
                       </td>
                       <td className="p-4">
                         <div className="text-sm text-gray-600">
-                          <div>{member.lastLogin === 'Never' ? 'Never' : member.lastLogin.split(' ')[0]}</div>
-                          {member.lastLogin !== 'Never' && (
+                          <div>
+                            {member.last_login ? new Date(member.last_login).toLocaleDateString() : 'Never'}
+                          </div>
+                          {member.last_login && (
                             <div className="text-xs text-gray-400">
-                              {member.lastLogin.split(' ')[1]}
+                              {new Date(member.last_login).toLocaleTimeString()}
                             </div>
                           )}
                         </div>
@@ -663,7 +651,7 @@ export default function TeamMembers() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-3">
                     <Avatar className="w-12 h-12">
-                      <AvatarImage src={member.profilePicture} />
+                      <AvatarImage src={member.profile_picture} />
                       <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
                         {member.name.split(' ').map(n => n[0]).join('')}
                       </AvatarFallback>
@@ -678,8 +666,8 @@ export default function TeamMembers() {
                     <Badge className={`${getStatusColor(member.status)} text-white text-xs`}>
                       {getStatusText(member.status)}
                     </Badge>
-                    <Badge className={`${getRoleColor(member.role)} text-white text-xs`}>
-                      {getRoleText(member.role)}
+                    <Badge className={`${getRoleColor(member.role || '')} text-white text-xs`}>
+                      {getRoleText(member.role || '')}
                     </Badge>
                   </div>
                 </div>
@@ -687,23 +675,23 @@ export default function TeamMembers() {
                 <div className="space-y-3 mb-4">
                   <div className="flex items-center space-x-2 text-sm text-gray-600">
                     <Shield className="w-4 h-4" />
-                    <span>{member.department}</span>
+                    <span>{member.department || 'Unassigned'}</span>
                   </div>
                   <div className="flex items-center space-x-2 text-sm text-gray-600">
                     <Phone className="w-4 h-4" />
-                    <span>{member.phone}</span>
+                    <span>{member.phone || 'No phone'}</span>
                   </div>
                   <div className="flex items-center space-x-2 text-sm text-gray-600">
                     <LogIn className="w-4 h-4" />
-                    <span>Added: {member.dateAdded}</span>
+                    <span>Added: {new Date(member.date_added).toLocaleDateString()}</span>
                   </div>
                   <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    {member.dashboardAccess === 'visible' ? (
+                    {member.dashboard_access === 'visible' ? (
                       <Eye className="w-4 h-4 text-green-600" />
                     ) : (
                       <EyeOff className="w-4 h-4 text-gray-400" />
                     )}
-                    <span>Dashboard: {member.dashboardAccess}</span>
+                    <span>Dashboard: {member.dashboard_access}</span>
                   </div>
                 </div>
 
@@ -754,9 +742,11 @@ export default function TeamMembers() {
           ))}
         </div>
       )}
+        </>
+      )}
 
       {/* Empty State */}
-      {sortedMembers.length === 0 && (
+      {!isInitialLoading && sortedMembers.length === 0 && (
         <Card className="bg-white/70 backdrop-blur-md border-white/20 shadow-lg">
           <CardContent className="p-12 text-center">
             <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -765,7 +755,7 @@ export default function TeamMembers() {
               Try adjusting your search criteria or filters to find what you're looking for.
             </p>
             <Button
-              onClick={() => console.log('Add new member')}
+              onClick={() => setIsAddMemberModalOpen(true)}
               className="bg-[#1473B9] hover:bg-[#0f5a8f] text-white"
             >
               <Plus className="w-4 h-4 mr-2" />

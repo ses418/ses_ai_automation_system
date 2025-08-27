@@ -102,7 +102,7 @@ export default function SignIn() {
             <img 
               src="/src/components/layout/asserts/download-removebg-preview.png" 
               alt="SES Logo" 
-              className="w-20 h-20 mx-auto mb-6 animate-slow-rotate"
+              className="w-20 h-20 mx-auto mb-6"
             />
             
             {/* Company Name - Single line, no wrapping */}

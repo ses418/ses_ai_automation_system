@@ -24,7 +24,7 @@ export const Header = () => {
             <img 
               src="/src/components/layout/asserts/download-removebg-preview.png" 
               alt="SES Logo" 
-              className="w-10 h-10 animate-slow-rotate"
+              className="w-10 h-10"
             />
             <h1 className="text-xl font-semibold text-primary-brand">Shiva Engineering Services</h1>
           </div>
