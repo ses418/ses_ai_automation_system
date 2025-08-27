@@ -287,31 +287,141 @@ export class TeamMembersService {
   /**
    * Get team member count by department
    */
-  static async getTeamMemberCountByDepartment(): Promise<{ department: string; count: number }[]> {
+  static async getTeamMemberCountByDepartment(): Promise<Record<string, number>> {
     try {
       const { data, error } = await supabase
         .from('team_members')
         .select('department')
-        .eq('status', 'active');
+        .not('department', 'is', null);
 
       if (error) {
         console.error('Error fetching team member count by department:', error);
-        throw new Error(`Failed to fetch team member count: ${error.message}`);
+        throw new Error(`Failed to fetch team member count by department: ${error.message}`);
       }
 
-      const departmentCounts = data?.reduce((acc, member) => {
+      const countByDepartment: Record<string, number> = {};
+      data?.forEach(member => {
         const dept = member.department || 'Unassigned';
-        acc[dept] = (acc[dept] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
+        countByDepartment[dept] = (countByDepartment[dept] || 0) + 1;
+      });
 
-      return Object.entries(departmentCounts || {}).map(([department, count]) => ({
-        department,
-        count
-      }));
+      return countByDepartment;
     } catch (error) {
       console.error('Error in getTeamMemberCountByDepartment:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Check if team_members table exists and create it if it doesn't
+   */
+  static async ensureTableExists(): Promise<boolean> {
+    try {
+      console.log('Checking if team_members table exists...');
+      
+      // Try to select from the table to see if it exists
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('id')
+        .limit(1);
+
+      if (error) {
+        if (error.message.includes('relation "team_members" does not exist')) {
+          console.log('Table does not exist, attempting to create it...');
+          return await this.createTable();
+        } else {
+          console.error('Error checking table existence:', error);
+          return false;
+        }
+      }
+
+      console.log('Table exists and is accessible');
+      return true;
+    } catch (error) {
+      console.error('Error in ensureTableExists:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Create the team_members table
+   */
+  private static async createTable(): Promise<boolean> {
+    try {
+      console.log('Creating team_members table...');
+      
+      // Create table using SQL
+      const { error } = await supabase.rpc('exec_sql', {
+        sql: `
+          CREATE TABLE IF NOT EXISTS public.team_members (
+            id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL UNIQUE,
+            password_hash VARCHAR(255) NOT NULL,
+            phone VARCHAR(50),
+            department VARCHAR(100),
+            role VARCHAR(100),
+            location VARCHAR(255),
+            status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'pending')),
+            dashboard_access VARCHAR(20) DEFAULT 'visible' CHECK (dashboard_access IN ('visible', 'hidden')),
+            profile_picture VARCHAR(500),
+            date_added TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            last_login TIMESTAMP WITH TIME ZONE,
+            is_admin BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+          
+          -- Create indexes
+          CREATE INDEX IF NOT EXISTS idx_team_members_email ON public.team_members(email);
+          CREATE INDEX IF NOT EXISTS idx_team_members_department ON public.team_members(department);
+          CREATE INDEX IF NOT EXISTS idx_team_members_role ON public.team_members(role);
+          CREATE INDEX IF NOT EXISTS idx_team_members_status ON public.team_members(status);
+          CREATE INDEX IF NOT EXISTS idx_team_members_date_added ON public.team_members(date_added);
+          
+          -- IMPORTANT: Do NOT enable RLS for now
+          -- ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
+          
+          -- Grant permissions
+          GRANT ALL ON public.team_members TO public;
+          GRANT USAGE ON SCHEMA public TO public;
+        `
+      });
+
+      if (error) {
+        console.error('Error creating table:', error);
+        return false;
+      }
+
+      console.log('Table created successfully');
+      return true;
+    } catch (error) {
+      console.error('Error in createTable:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Disable RLS temporarily (for development/testing)
+   */
+  static async disableRLS(): Promise<boolean> {
+    try {
+      console.log('Attempting to disable RLS on team_members table...');
+      
+      const { error } = await supabase.rpc('exec_sql', {
+        sql: 'ALTER TABLE public.team_members DISABLE ROW LEVEL SECURITY;'
+      });
+
+      if (error) {
+        console.error('Error disabling RLS:', error);
+        return false;
+      }
+
+      console.log('RLS disabled successfully');
+      return true;
+    } catch (error) {
+      console.error('Error in disableRLS:', error);
+      return false;
     }
   }
 }

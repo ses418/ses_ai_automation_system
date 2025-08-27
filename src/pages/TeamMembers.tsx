@@ -171,7 +171,7 @@ export default function TeamMembers() {
     try {
       setIsLoading(true);
       console.log('Adding new team member:', memberData);
-      
+
       // Create the new team member using the service
       const newMember = await TeamMembersService.createTeamMember({
         name: memberData.name,
@@ -182,28 +182,38 @@ export default function TeamMembers() {
         role: memberData.role,
         location: memberData.location
       });
-      
+
       console.log('New member created:', newMember);
-      
+
       // Refresh the team members list
       const updatedMembers = await TeamMembersService.getTeamMembers();
       console.log('Updated members list:', updatedMembers);
       setTeamMembers(updatedMembers);
       setFilteredTeamMembers(updatedMembers);
-      
+
       toast({
         title: "Success",
         description: "Team member added successfully!"
       });
-      
+
       setIsAddMemberModalOpen(false);
     } catch (error) {
       console.error('Error adding team member:', error);
-      toast({
-        title: "Error",
-        description: `Failed to add team member: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive"
-      });
+      
+      // Check if it's an RLS error
+      if (error instanceof Error && error.message.includes('row-level security policy')) {
+        toast({
+          title: "RLS Policy Error",
+          description: "The database security policy is blocking this operation. Please run the SQL script in Supabase to fix this.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: `Failed to add team member: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsLoading(false);
     }

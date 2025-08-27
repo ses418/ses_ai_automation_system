@@ -1,20 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config';
 
-// Get environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Debug: Log configuration
+console.log('=== SUPABASE CLIENT INITIALIZATION ===');
+console.log('SUPABASE_URL:', SUPABASE_URL);
+console.log('SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'SET' : 'MISSING');
+console.log('=====================================');
 
-// Runtime guard to ensure environment variables are set
-if (!supabaseUrl || !supabaseAnonKey) {
+// Runtime guard to ensure configuration is set
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('=== MISSING SUPABASE CONFIGURATION ===');
+  console.error('SUPABASE_URL:', SUPABASE_URL ? 'SET' : 'MISSING');
+  console.error('SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'SET' : 'MISSING');
+  console.error('=====================================');
+  
   throw new Error(
-    'Missing Supabase environment variables. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your .env.local file.'
+    'Missing Supabase configuration. Please check the config.ts file.'
   );
 }
 
 // Create and export the Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Log successful connection (only in development)
-if (import.meta.env.DEV) {
-  console.log('Supabase client initialized successfully');
-}
+// Log successful connection
+console.log('Supabase client initialized successfully with URL:', SUPABASE_URL);
+console.log('Supabase client initialized successfully with Key:', SUPABASE_ANON_KEY ? 'SET' : 'MISSING');

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Config</title>
+</head>
+<body>
+    <h1>Supabase Configuration</h1>
+    <p>This page sets the Supabase configuration for development.</p>
+    
+    <script>
+        // Set Supabase configuration in browser
+        window.__SUPABASE_CONFIG__ = {
+            VITE_SUPABASE_URL: 'https://malcoclwzccbphacjtgg.supabase.co',
+            VITE_SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hbGNvY2x3emNjYnBoYWNqdGdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQyMDM3MzEsImV4cCI6MjA2OTc3OTczMX0.AWGO4JC3tbxA1rhTmfHcLGCwRSfESaQitTZHXmjxsfI'
+        };
+        
+        // Also store in localStorage as backup
+        localStorage.setItem('VITE_SUPABASE_URL', window.__SUPABASE_CONFIG__.VITE_SUPABASE_URL);
+        localStorage.setItem('VITE_SUPABASE_ANON_KEY', window.__SUPABASE_CONFIG__.VITE_SUPABASE_ANON_KEY);
+        
+        console.log('Supabase configuration set in browser:', window.__SUPABASE_CONFIG__);
+        
+        // Redirect to main app
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 1000);
+    </script>
+</body>
+</html>
