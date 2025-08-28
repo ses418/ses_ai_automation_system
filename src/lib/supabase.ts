@@ -5,6 +5,10 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config';
 console.log('=== SUPABASE CLIENT INITIALIZATION ===');
 console.log('SUPABASE_URL:', SUPABASE_URL);
 console.log('SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'SET' : 'MISSING');
+console.log('Environment:', import.meta.env.MODE);
+console.log('Base URL:', import.meta.env.BASE_URL);
+console.log('Dev mode:', import.meta.env.DEV);
+console.log('Prod mode:', import.meta.env.PROD);
 console.log('=====================================');
 
 // Runtime guard to ensure configuration is set

@@ -184,8 +184,14 @@ export default function Articles() {
         });
         return;
       }
+
+      // Test basic Supabase connection first
+      console.log('Testing Supabase connection...');
+      const connectionTest = await supabase.from('ses_clients').select('count(*)', { count: 'exact', head: true });
+      console.log('Connection test result:', connectionTest);
       
-      // First try without .single() to see what we get
+      // Try a simple query first
+      console.log('Attempting direct query...');
       const { data, error } = await supabase
         .from('ses_clients')
         .select('*')
@@ -394,9 +400,50 @@ export default function Articles() {
                 className="w-full"
               />
             </div>
-            <Button variant="outline">
+            <Button 
+              variant="outline"
+              onClick={async () => {
+                console.log('=== MANUAL DATABASE TEST ===');
+                try {
+                  // Test 1: Simple count query
+                  console.log('Testing count query...');
+                  const countResult = await supabase
+                    .from('ses_clients')
+                    .select('*', { count: 'exact', head: true });
+                  console.log('Count test result:', countResult);
+
+                  // Test 2: Select specific client
+                  console.log('Testing specific client query...');
+                  const clientResult = await supabase
+                    .from('ses_clients')
+                    .select('*')
+                    .eq('client_id', '4108a2ff-912c-472f-a005-0f7f1061ad41');
+                  console.log('Specific client test result:', clientResult);
+
+                  // Test 3: Select leads
+                  console.log('Testing leads query...');
+                  const leadsResult = await supabase
+                    .from('ses_lead_master')
+                    .select('*')
+                    .eq('client_id', '4108a2ff-912c-472f-a005-0f7f1061ad41');
+                  console.log('Leads test result:', leadsResult);
+
+                  toast({
+                    title: "Database Test Complete",
+                    description: "Check console for detailed results",
+                  });
+                } catch (error) {
+                  console.error('Database test error:', error);
+                  toast({
+                    title: "Database Test Failed",
+                    description: "Check console for error details",
+                    variant: "destructive"
+                  });
+                }
+              }}
+            >
               <Filter className="h-4 w-4 mr-2" />
-              Filters
+              Test DB
             </Button>
           </div>
         </CardContent>
