@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, Building, Shield, ArrowRight, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, Shield, ArrowRight, Sparkles } from 'lucide-react';
+import { AuthService } from '@/services/authService';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -12,6 +13,7 @@ export default function SignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [error, setError] = useState('');
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -39,15 +41,23 @@ export default function SignIn() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const result = await AuthService.signIn({ email, password });
+      
+      if (result.error) {
+        setError(result.error);
+      } else {
+        // Navigate to dashboard after successful sign-in
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      setError('An unexpected error occurred. Please try again.');
+      console.error('Sign in error:', err);
+    } finally {
       setIsLoading(false);
-      // Set authentication flag
-      localStorage.setItem('isAuthenticated', 'true');
-      // Navigate to dashboard after successful sign-in
-      navigate('/dashboard');
-    }, 1000);
+    }
   };
 
   return (
@@ -135,6 +145,13 @@ export default function SignIn() {
             
             <CardContent className="space-y-6">
               <form onSubmit={handleSignIn} className="space-y-6">
+                {/* Error Message */}
+                {error && (
+                  <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3 text-red-200 text-sm">
+                    {error}
+                  </div>
+                )}
+
                 {/* Email Field */}
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium text-white/90">
@@ -227,40 +244,6 @@ export default function SignIn() {
                   )}
                 </Button>
               </form>
-
-              {/* Enhanced Divider */}
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/20"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-black/50 text-white/60 backdrop-blur-sm rounded-full">Or continue with</span>
-                </div>
-              </div>
-
-              {/* Enhanced Demo Credentials */}
-              <div className="backdrop-blur-sm bg-white/10 border border-white/20 rounded-xl p-4 hover:bg-white/15 transition-all duration-300 group">
-                <h4 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-yellow-400" />
-                  Demo Credentials
-                </h4>
-                <div className="text-xs text-white/80 space-y-1 mb-3">
-                  <p><strong>Email:</strong> demo@ses.com</p>
-                  <p><strong>Password:</strong> demo123</p>
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setEmail('demo@ses.com');
-                    setPassword('demo123');
-                  }}
-                  variant="outline"
-                  size="sm"
-                  className="w-full border-white/30 text-white hover:bg-white hover:text-black transition-all duration-300 group-hover:scale-105"
-                >
-                  Use Demo Credentials
-                </Button>
-              </div>
             </CardContent>
           </Card>
 

@@ -1,370 +1,383 @@
 import { supabase } from '@/lib/supabase';
 import { TeamMember } from '@/types/team-members';
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  is_admin: boolean;
+  status: string;
+  department?: string;
+  role?: string;
+}
+
 export interface LoginCredentials {
   email: string;
   password: string;
 }
 
-export interface AuthResponse {
-  success: boolean;
-  message: string;
-  teamMember?: TeamMember;
-  isAdmin?: boolean;
-}
-
-export interface SessionData {
-  teamMember: TeamMember;
-  isAdmin: boolean;
-  sessionToken: string;
-  expiresAt: string;
+export interface RegisterData {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+  department?: string;
+  role?: string;
+  location?: string;
 }
 
 export class AuthService {
-  private static readonly SESSION_KEY = 'ses_auth_session';
-  private static readonly SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+  private static currentUser: AuthUser | null = null;
 
   /**
-   * Authenticate user with email and password
+   * Initialize authentication state
    */
-  static async login(credentials: LoginCredentials): Promise<AuthResponse> {
+  static async initialize(): Promise<AuthUser | null> {
     try {
-      // Call the database function to validate credentials
-      const { data, error } = await supabase
-        .rpc('validate_login_credentials', {
-          p_email: credentials.email,
-          p_password: credentials.password
-        });
-
-      if (error) {
-        console.error('Login validation error:', error);
-        return {
-          success: false,
-          message: 'Authentication service error. Please try again.'
-        };
-      }
-
-      if (!data || data.length === 0) {
-        return {
-          success: false,
-          message: 'Invalid credentials. Please check your email and password.'
-        };
-      }
-
-      const result = data[0];
+      const { data: { user } } = await supabase.auth.getUser();
       
-      if (!result.is_valid) {
-        return {
-          success: false,
-          message: result.message || 'Invalid credentials'
-        };
+      if (user) {
+        // Get team member profile
+        const profile = await this.getTeamMemberProfile(user.id);
+        if (profile) {
+          this.currentUser = {
+            id: profile.id,
+            email: profile.email,
+            name: profile.name,
+            is_admin: profile.is_admin,
+            status: profile.status,
+            department: profile.department,
+            role: profile.role
+          };
+        }
       }
-
-      // Get full team member details
-      const { data: memberData, error: memberError } = await supabase
-        .from('team_members')
-        .select('*')
-        .eq('id', result.team_member_id)
-        .single();
-
-      if (memberError || !memberData) {
-        return {
-          success: false,
-          message: 'Failed to retrieve user profile. Please try again.'
-        };
-      }
-
-      // Create session
-      const sessionToken = this.generateSessionToken();
-      const expiresAt = new Date(Date.now() + this.SESSION_DURATION).toISOString();
-
-      // Store session in database
-      const { error: sessionError } = await supabase
-        .from('user_sessions')
-        .insert({
-          team_member_id: result.team_member_id,
-          session_token: sessionToken,
-          expires_at: expiresAt,
-          ip_address: '127.0.0.1', // In real app, get from request
-          user_agent: navigator.userAgent
-        });
-
-      if (sessionError) {
-        console.error('Session creation error:', sessionError);
-        return {
-          success: false,
-          message: 'Failed to create session. Please try again.'
-        };
-      }
-
-      // Store session locally
-      const sessionData: SessionData = {
-        teamMember: memberData,
-        isAdmin: result.is_admin,
-        sessionToken,
-        expiresAt
-      };
-
-      this.storeSession(sessionData);
-
-      return {
-        success: true,
-        message: 'Login successful!',
-        teamMember: memberData,
-        isAdmin: result.is_admin
-      };
-
-    } catch (error) {
-      console.error('Login error:', error);
-      return {
-        success: false,
-        message: 'An unexpected error occurred. Please try again.'
-      };
-    }
-  }
-
-  /**
-   * Logout user and clear session
-   */
-  static async logout(): Promise<void> {
-    try {
-      const session = this.getCurrentSession();
       
-      if (session) {
-        // Remove session from database
-        await supabase
-          .from('user_sessions')
-          .delete()
-          .eq('session_token', session.sessionToken);
-      }
-
-      // Clear local session
-      this.clearSession();
+      return this.currentUser;
     } catch (error) {
-      console.error('Logout error:', error);
-      // Still clear local session even if database cleanup fails
-      this.clearSession();
+      console.error('Error initializing auth:', error);
+      return null;
     }
-  }
-
-  /**
-   * Check if user is currently authenticated
-   */
-  static isAuthenticated(): boolean {
-    const session = this.getCurrentSession();
-    if (!session) return false;
-
-    // Check if session has expired
-    if (new Date(session.expiresAt) < new Date()) {
-      this.clearSession();
-      return false;
-    }
-
-    return true;
   }
 
   /**
    * Get current authenticated user
    */
-  static getCurrentUser(): TeamMember | null {
-    const session = this.getCurrentSession();
-    if (!session || !this.isAuthenticated()) return null;
-    return session.teamMember;
+  static getCurrentUser(): AuthUser | null {
+    return this.currentUser;
   }
 
   /**
-   * Check if current user is admin
+   * Check if user is authenticated
+   */
+  static isAuthenticated(): boolean {
+    return this.currentUser !== null;
+  }
+
+  /**
+   * Check if user is admin
    */
   static isAdmin(): boolean {
-    const session = this.getCurrentSession();
-    if (!session || !this.isAuthenticated()) return false;
-    return session.isAdmin;
+    return this.currentUser?.is_admin === true;
   }
 
   /**
-   * Refresh session if needed
+   * Check if user has active status
    */
-  static async refreshSession(): Promise<boolean> {
-    try {
-      const session = this.getCurrentSession();
-      if (!session) return false;
-
-      // Check if session expires in next hour
-      const expiresIn = new Date(session.expiresAt).getTime() - Date.now();
-      if (expiresIn > 60 * 60 * 1000) return true; // More than 1 hour left
-
-      // Extend session
-      const newExpiresAt = new Date(Date.now() + this.SESSION_DURATION).toISOString();
-      
-      const { error } = await supabase
-        .from('user_sessions')
-        .update({ expires_at: newExpiresAt })
-        .eq('session_token', session.sessionToken);
-
-      if (error) {
-        console.error('Session refresh error:', error);
-        return false;
-      }
-
-      // Update local session
-      session.expiresAt = newExpiresAt;
-      this.storeSession(session);
-
-      return true;
-    } catch (error) {
-      console.error('Session refresh error:', error);
-      return false;
-    }
+  static isActive(): boolean {
+    return this.currentUser?.status === 'active';
   }
 
   /**
-   * Validate session token with server
+   * Sign up with Supabase Auth and create team member profile
    */
-  static async validateSession(): Promise<boolean> {
+  static async signUp(data: RegisterData): Promise<{ user: AuthUser; error?: string }> {
     try {
-      const session = this.getCurrentSession();
-      if (!session) return false;
+      // First, create the user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            name: data.name,
+            department: data.department,
+            role: data.role,
+            location: data.location
+          }
+        }
+      });
 
-      const { data, error } = await supabase
-        .from('user_sessions')
-        .select('*')
-        .eq('session_token', session.sessionToken)
-        .eq('expires_at', 'gt', new Date().toISOString())
-        .single();
-
-      if (error || !data) {
-        this.clearSession();
-        return false;
+      if (authError) {
+        return { user: null as any, error: authError.message };
       }
 
-      return true;
-    } catch (error) {
-      console.error('Session validation error:', error);
-      this.clearSession();
-      return false;
-    }
-  }
-
-  /**
-   * Change user password
-   */
-  static async changePassword(
-    currentPassword: string, 
-    newPassword: string
-  ): Promise<AuthResponse> {
-    try {
-      const session = this.getCurrentSession();
-      if (!session) {
-        return {
-          success: false,
-          message: 'No active session found'
-        };
+      if (!authData.user) {
+        return { user: null as any, error: 'Failed to create user' };
       }
 
-      // Validate current password
-      const { data, error } = await supabase
-        .rpc('validate_login_credentials', {
-          p_email: session.teamMember.email,
-          p_password: currentPassword
+      // Create team member profile using the secure function
+      const { data: profile, error: profileError } = await supabase
+        .rpc('create_team_member_with_auth', {
+          p_name: data.name,
+          p_email: data.email,
+          p_password_hash: 'supabase_auth', // We're using Supabase Auth, so this is just a placeholder
+          p_phone: data.phone,
+          p_department: data.department,
+          p_role: data.role,
+          p_location: data.location,
+          p_status: 'pending', // New users start as pending
+          p_is_admin: false
         });
 
-      if (error || !data || data.length === 0 || !data[0].is_valid) {
-        return {
-          success: false,
-          message: 'Current password is incorrect'
-        };
+      if (profileError) {
+        // If profile creation fails, we should clean up the auth user
+        await supabase.auth.admin.deleteUser(authData.user.id);
+        return { user: null as any, error: profileError.message };
       }
 
-      // Update password (in real app, hash the new password)
-      const { error: updateError } = await supabase
-        .from('auth_credentials')
-        .update({ 
-          password_hash: `$2a$10$new.hash.${Date.now()}`,
-          updated_at: new Date().toISOString()
-        })
-        .eq('team_member_id', session.teamMember.id);
-
-      if (updateError) {
-        return {
-          success: false,
-          message: 'Failed to update password. Please try again.'
-        };
-      }
-
-      return {
-        success: true,
-        message: 'Password updated successfully!'
+      // Set current user
+      this.currentUser = {
+        id: profile,
+        email: data.email,
+        name: data.name,
+        is_admin: false,
+        status: 'pending',
+        department: data.department,
+        role: data.role
       };
 
+      return { user: this.currentUser };
     } catch (error) {
-      console.error('Password change error:', error);
-      return {
-        success: false,
-        message: 'An unexpected error occurred. Please try again.'
-      };
+      console.error('Error in signUp:', error);
+      return { user: null as any, error: 'An unexpected error occurred' };
     }
   }
 
   /**
-   * Get user permissions and access levels
+   * Sign in with email and password
    */
-  static getUserPermissions(): {
-    canViewDashboard: boolean;
-    canManageTeam: boolean;
-    canViewAnalytics: boolean;
-    canExportData: boolean;
-  } {
-    const isAdmin = this.isAdmin();
-    const user = this.getCurrentUser();
-
-    return {
-      canViewDashboard: true, // All authenticated users can view dashboard
-      canManageTeam: isAdmin || user?.role === 'Manager' || user?.role === 'HOD',
-      canViewAnalytics: isAdmin || user?.role === 'Manager',
-      canExportData: isAdmin || user?.role === 'Manager'
-    };
-  }
-
-  // Private helper methods
-
-  private static generateSessionToken(): string {
-    return 'ses_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-  }
-
-  private static storeSession(session: SessionData): void {
+  static async signIn(credentials: LoginCredentials): Promise<{ user: AuthUser; error?: string }> {
     try {
-      localStorage.setItem(this.SESSION_KEY, JSON.stringify(session));
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password
+      });
+
+      if (error) {
+        return { user: null as any, error: error.message };
+      }
+
+      if (!data.user) {
+        return { user: null as any, error: 'No user returned from authentication' };
+      }
+
+      // Get team member profile
+      const profile = await this.getTeamMemberProfile(data.user.id);
+      if (!profile) {
+        return { user: null as any, error: 'Team member profile not found' };
+      }
+
+      if (profile.status !== 'active') {
+        await supabase.auth.signOut();
+        return { user: null as any, error: 'Account is not active. Please contact an administrator.' };
+      }
+
+      // Set current user
+      this.currentUser = {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        is_admin: profile.is_admin,
+        status: profile.status,
+        department: profile.department,
+        role: profile.role
+      };
+
+      // Update last login
+      await this.updateLastLogin(profile.id);
+
+      return { user: this.currentUser };
     } catch (error) {
-      console.error('Failed to store session:', error);
+      console.error('Error in signIn:', error);
+      return { user: null as any, error: 'An unexpected error occurred' };
     }
   }
 
-  private static getCurrentSession(): SessionData | null {
+  /**
+   * Sign out
+   */
+  static async signOut(): Promise<void> {
     try {
-      const sessionData = localStorage.getItem(this.SESSION_KEY);
-      if (!sessionData) return null;
-      
-      const session = JSON.parse(sessionData) as SessionData;
-      
-      // Validate session structure
-      if (!session.teamMember || !session.sessionToken || !session.expiresAt) {
-        this.clearSession();
+      await supabase.auth.signOut();
+      this.currentUser = null;
+    } catch (error) {
+      console.error('Error in signOut:', error);
+    }
+  }
+
+  /**
+   * Get team member profile by auth user ID
+   */
+  private static async getTeamMemberProfile(authUserId: string): Promise<TeamMember | null> {
+    try {
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('*')
+        .eq('id', authUserId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching team member profile:', error);
         return null;
       }
 
-      return session;
+      return data;
     } catch (error) {
-      console.error('Failed to retrieve session:', error);
-      this.clearSession();
+      console.error('Error in getTeamMemberProfile:', error);
       return null;
     }
   }
 
-  private static clearSession(): void {
+  /**
+   * Update last login time
+   */
+  private static async updateLastLogin(teamMemberId: string): Promise<void> {
     try {
-      localStorage.removeItem(this.SESSION_KEY);
+      const { error } = await supabase
+        .from('team_members')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', teamMemberId);
+
+      if (error) {
+        console.error('Error updating last login:', error);
+      }
     } catch (error) {
-      console.error('Failed to clear session:', error);
+      console.error('Error in updateLastLogin:', error);
     }
+  }
+
+  /**
+   * Get current user profile
+   */
+  static async getCurrentUserProfile(): Promise<TeamMember | null> {
+    try {
+      if (!this.currentUser) {
+        return null;
+      }
+
+      const { data, error } = await supabase
+        .rpc('get_current_user_profile');
+
+      if (error) {
+        console.error('Error fetching current user profile:', error);
+        return null;
+      }
+
+      return data[0] || null;
+    } catch (error) {
+      console.error('Error in getCurrentUserProfile:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Update current user profile
+   */
+  static async updateCurrentUserProfile(updateData: Partial<TeamMember>): Promise<TeamMember | null> {
+    try {
+      if (!this.currentUser) {
+        throw new Error('No authenticated user');
+      }
+
+      const { data, error } = await supabase
+        .from('team_members')
+        .update(updateData)
+        .eq('id', this.currentUser.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating user profile:', error);
+        return null;
+      }
+
+      // Update current user object
+      this.currentUser = {
+        ...this.currentUser,
+        ...updateData
+      };
+
+      return data;
+    } catch (error) {
+      console.error('Error in updateCurrentUserProfile:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Change password
+   */
+  static async changePassword(newPassword: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in changePassword:', error);
+      return { success: false, error: 'An unexpected error occurred' };
+    }
+  }
+
+  /**
+   * Reset password
+   */
+  static async resetPassword(email: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in resetPassword:', error);
+      return { success: false, error: 'An unexpected error occurred' };
+    }
+  }
+
+  /**
+   * Listen to authentication state changes
+   */
+  static onAuthStateChange(callback: (user: AuthUser | null) => void): () => void {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const profile = await this.getTeamMemberProfile(session.user.id);
+        if (profile) {
+          this.currentUser = {
+            id: profile.id,
+            email: profile.email,
+            name: profile.name,
+            is_admin: profile.is_admin,
+            status: profile.status,
+            department: profile.department,
+            role: profile.role
+          };
+          callback(this.currentUser);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        this.currentUser = null;
+        callback(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }
 }
