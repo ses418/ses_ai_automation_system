@@ -22,7 +22,7 @@ export const Header = () => {
           {/* Left: Logo & App Name */}
           <div className="flex items-center gap-4">
             <img 
-              src="/src/components/layout/asserts/download-removebg-preview.png" 
+              src="/ses-logo.png" 
               alt="SES Logo" 
               className="w-10 h-10"
             />

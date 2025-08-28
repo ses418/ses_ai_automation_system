@@ -72,7 +72,7 @@ export default function SignIn() {
         className="absolute inset-0 w-full h-full object-cover opacity-40"
         style={{ filter: 'brightness(0.3) contrast(1.2)' }}
       >
-        <source src="/src/components/layout/asserts/WhatsApp Video 2025-08-25 at 2.34.20 PM.mp4" type="video/mp4" />
+        <source src="/background-video.mp4" type="video/mp4" />
         Your browser does not support the video tag.
       </video>
 
@@ -110,7 +110,7 @@ export default function SignIn() {
           <div className="text-center mb-8">
             {/* Logo - Direct image with rotation */}
             <img 
-              src="/src/components/layout/asserts/download-removebg-preview.png" 
+              src="/ses-logo.png" 
               alt="SES Logo" 
               className="w-20 h-20 mx-auto mb-6"
             />

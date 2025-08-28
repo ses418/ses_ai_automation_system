@@ -23,8 +23,15 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
-// Create and export the Supabase client
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Create and export the Supabase client with auth options
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    // Note: Email confirmation is controlled by Supabase project settings
+  }
+});
 
 // Log successful connection
 console.log('Supabase client initialized successfully with URL:', SUPABASE_URL);

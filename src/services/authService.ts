@@ -173,7 +173,8 @@ export class AuthService {
       // Get team member profile
       const profile = await this.getTeamMemberProfile(data.user.id);
       if (!profile) {
-        return { user: null as any, error: 'Team member profile not found' };
+        console.error('No team member profile found for email:', data.user.email);
+        return { user: null as any, error: `Team member profile not found for email: ${data.user.email}. Please contact an administrator.` };
       }
 
       if (profile.status !== 'active') {
@@ -215,21 +216,38 @@ export class AuthService {
   }
 
   /**
-   * Get team member profile by auth user ID
+   * Get team member profile by auth user email
    */
   private static async getTeamMemberProfile(authUserId: string): Promise<TeamMember | null> {
     try {
-      const { data, error } = await supabase
-        .from('team_members')
-        .select('*')
-        .eq('id', authUserId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching team member profile:', error);
+      // Get current user from session
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('Error fetching current user:', userError);
         return null;
       }
 
+      if (!user || !user.email) {
+        console.error('No email found for current user');
+        return null;
+      }
+
+      console.log('Looking for team member with email:', user.email);
+
+      // Find team member by email
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('*')
+        .eq('email', user.email)
+        .single();
+
+      if (error) {
+        console.error('Error fetching team member profile by email:', error);
+        return null;
+      }
+
+      console.log('Found team member profile:', data);
       return data;
     } catch (error) {
       console.error('Error in getTeamMemberProfile:', error);
