@@ -14,9 +14,9 @@ export class TeamMembersService {
     try {
       console.log('TeamMembersService.getTeamMembers called with filters:', filters);
       
-      // Use the secure view that respects RLS policies
+      // Use the direct table since the view doesn't exist
       let query = supabase
-        .from('secure_team_members_view')
+        .from('team_members')
         .select('*')
         .order('date_added', { ascending: false });
 
@@ -123,12 +123,12 @@ export class TeamMembersService {
         throw new Error('A team member with this email already exists');
       }
 
-      // Use the secure function that respects RLS policies
+      // Use the simple function that creates team member only
       const { data, error } = await supabase
-        .rpc('create_team_member_with_auth', {
+        .rpc('create_team_member_only', {
           p_name: memberData.name,
           p_email: memberData.email,
-          p_password_hash: 'supabase_auth', // Placeholder since we're using Supabase Auth
+          p_password: memberData.password,
           p_phone: memberData.phone,
           p_department: memberData.department,
           p_role: memberData.role,
@@ -145,14 +145,23 @@ export class TeamMembersService {
         throw new Error(`Failed to create team member: ${error.message}`);
       }
 
-      // Get the created team member
-      const createdMember = await this.getTeamMemberById(data);
-      if (!createdMember) {
-        throw new Error('Failed to retrieve created team member');
-      }
-
-      console.log('Team member created successfully:', createdMember);
-      return createdMember;
+      // Return a basic success response instead of fetching the created member
+      // This avoids the RLS recursion issue
+      console.log('Team member created successfully with ID:', data);
+      return {
+        id: data,
+        name: memberData.name,
+        email: memberData.email,
+        phone: memberData.phone,
+        department: memberData.department,
+        role: memberData.role,
+        location: memberData.location,
+        status: 'active',
+        dashboard_access: 'visible',
+        is_admin: memberData.role === 'Head of SES',
+        date_added: new Date().toISOString(),
+        last_login: null
+      } as TeamMember;
     } catch (error) {
       console.error('Error in createTeamMember:', error);
       throw error;
@@ -264,7 +273,7 @@ export class TeamMembersService {
   static async getAdminTeamMembers(): Promise<TeamMember[]> {
     try {
       const { data, error } = await supabase
-        .from('secure_team_members_view')
+        .from('team_members')
         .select('*')
         .eq('is_admin', true)
         .order('date_added', { ascending: false });
@@ -287,7 +296,7 @@ export class TeamMembersService {
   static async getTeamMemberCountByDepartment(): Promise<Record<string, number>> {
     try {
       const { data, error } = await supabase
-        .from('secure_team_members_view')
+        .from('team_members')
         .select('department')
         .not('department', 'is', null);
 
