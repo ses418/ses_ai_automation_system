@@ -17,12 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
   TableRow 
 } from '@/components/ui/table';
 import { 
@@ -34,11 +34,11 @@ import {
   DialogTitle 
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
   SelectValue 
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
@@ -56,19 +56,93 @@ interface Article {
   country?: string;
   article_date?: string;
   client_id?: string;
+  ses_clients?: {
+    client_id: string;
+    client_name: string;
+    website: string | null;
+    headquarters: string | null;
+    client_overview: string | null;
+    business_size: string | null;
+    annual_revenue: string | null;
+    products: string[] | null;
+    type_of_client: string | null;
+    engagement_advise_ses: string | null;
+    no_of_projects_done: number | null;
+    no_of_projects_in_pipeline: number | null;
+    role_of_client: string | null;
+  };
+  ses_lead_master?: {
+    lead_id: string;
+    full_name: string;
+    email: string | null;
+    mobile: string | null;
+    linkedin: string | null;
+    designation: string | null;
+    seniority: string | null;
+    lead_type: string | null;
+    lead_source: string | null;
+  };
 }
 
 interface SesPotentialProject {
   article_id: string;
-  validation_score?: string;
-  rd_focus_area?: string;
-  deep_researchinfo?: string;
-  resent_announcement?: string;
-  pp_stage?: string;
-  article_date?: string;
-  deep_research_status?: string;
-  newsletter_check?: boolean;
-  news_mentioned?: string;
+  raw_article_id: string;
+  article_link: string;
+  article_date: string | null;
+  type_of_article: 'CP' | 'PP' | 'RD' | null;
+  segment_id: string | null;
+  validation_score: number | null;
+  insights_summary: string | null;
+  pp_scope: string | null;
+  pp_stage: string | null;
+  rd_focus_area: string | null;
+  rd_type: string | null;
+  rd_keywords: string[] | null;
+  location: string | null;
+  country: string | null;
+  state: string | null;
+  city: string | null;
+  client_id: string | null;
+  additional_info: string | null;
+  tech_stack: string[] | null;
+  pain_point_tag: string | null;
+  news_mentioned: string[] | null;
+  recent_announcement: string | null;
+  mail_snippet: string | null;
+  deep_research_info: string | null;
+  deep_research_status: 'done' | 'pending' | null;
+  newsletter_check: boolean | null;
+  newsletter_id: string | null;
+  drop_reason: string | null;
+  drop_check: boolean | null;
+  processed_deep_lead: boolean | null;
+  created_at: string | null;
+  ses_clients?: {
+    client_id: string;
+    client_name: string;
+    website: string | null;
+    headquarters: string | null;
+    client_overview: string | null;
+    business_size: string | null;
+    annual_revenue: string | null;
+    products: string[] | null;
+    type_of_client: string | null;
+    engagement_advise_ses: string | null;
+    no_of_projects_done: number | null;
+    no_of_projects_in_pipeline: number | null;
+    role_of_client: string | null;
+  };
+  ses_lead_master?: {
+    lead_id: string;
+    full_name: string;
+    email: string | null;
+    mobile: string | null;
+    linkedin: string | null;
+    designation: string | null;
+    seniority: string | null;
+    lead_type: string | null;
+    lead_source: string | null;
+  };
 }
 
 interface SesClient {
@@ -124,18 +198,18 @@ export default function Articles() {
     loadArticles();
   }, []);
 
-  const loadArticles = async () => {
+    const loadArticles = async () => {
     try {
       setLoading(true);
       
-      // Fetch articles from ses_potential_project table
-      const { data, error } = await supabase
+      // First fetch all articles
+      const { data: articlesData, error: articlesError } = await supabase
         .from('ses_potential_project')
         .select('*')
         .order('article_date', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching articles:', error);
+      if (articlesError) {
+        console.error('Error fetching articles:', articlesError);
         toast({
           title: "Error",
           description: "Failed to load articles",
@@ -144,7 +218,52 @@ export default function Articles() {
         return;
       }
 
-      setArticles(data || []);
+      // Then fetch client and lead data for articles that have client_id
+      const articlesWithClientId = articlesData?.filter(article => article.client_id) || [];
+      
+      if (articlesWithClientId.length > 0) {
+        const clientIds = [...new Set(articlesWithClientId.map(article => article.client_id))];
+        
+        // Fetch client data
+        const { data: clientsData, error: clientsError } = await supabase
+          .from('ses_clients')
+          .select('*')
+          .in('client_id', clientIds);
+
+        if (clientsError) {
+          console.error('Error fetching clients:', clientsError);
+        }
+
+        // Fetch lead data
+        const { data: leadsData, error: leadsError } = await supabase
+          .from('ses_lead_master')
+          .select('*')
+          .in('client_id', clientIds);
+
+        if (leadsError) {
+          console.error('Error fetching leads:', leadsError);
+        }
+
+        // Combine the data
+        const enrichedArticles = articlesData?.map(article => {
+          const client = clientsData?.find(c => c.client_id === article.client_id);
+          const leads = leadsData?.filter(l => l.client_id === article.client_id);
+          
+          return {
+            ...article,
+            ses_clients: client || null,
+            ses_lead_master: leads && leads.length > 0 ? leads[0] : null // Take first lead for now
+          };
+        }) || [];
+
+        console.log('Articles loaded with enriched data:', enrichedArticles);
+        console.log('Sample article with client data:', enrichedArticles.find(a => a.client_id));
+        console.log('Sample article with lead data:', enrichedArticles.find(a => a.ses_lead_master));
+        setArticles(enrichedArticles);
+      } else {
+        console.log('No articles with client_id found');
+        setArticles(articlesData || []);
+      }
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -203,16 +322,13 @@ export default function Articles() {
   // Open client details modal
   const openClientModal = async (clientId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('ses_clients')
-        .select('*')
-        .eq('client_id', clientId)
-        .single();
-
-      if (error) {
+      // Find the article with this client_id to get the joined client data
+      const article = articles.find(art => art.client_id === clientId);
+      
+      if (!article || !article.ses_clients) {
         toast({
-          title: "Error",
-          description: "Failed to load client details",
+          title: "Warning",
+          description: "No client data found for this article",
           variant: "destructive"
         });
         return;
@@ -221,9 +337,10 @@ export default function Articles() {
       setModalState({
         isOpen: true,
         type: 'client',
-        data
+        data: article.ses_clients
       });
     } catch (error) {
+      console.error('Error opening client modal:', error);
       toast({
         title: "Error",
         description: "Failed to load client details",
@@ -235,16 +352,16 @@ export default function Articles() {
   // Open leads modal
   const openLeadsModal = async (clientId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('ses_lead_master')
-        .select('*')
-        .eq('client_id', clientId);
-
-      if (error) {
+      // Find all articles with this client_id to get all related leads
+      const articlesWithClient = articles.filter(art => art.client_id === clientId);
+      const allLeads = articlesWithClient
+        .map(article => article.ses_lead_master)
+        .filter(lead => lead !== null && lead !== undefined);
+      
+      if (allLeads.length === 0) {
         toast({
-          title: "Error",
-          description: "Failed to load leads",
-          variant: "destructive"
+          title: "Info",
+          description: "No leads found for this client",
         });
         return;
       }
@@ -252,9 +369,10 @@ export default function Articles() {
       setModalState({
         isOpen: true,
         type: 'leads',
-        data: { leads: data || [], clientId }
+        data: { leads: allLeads, clientId }
       });
     } catch (error) {
+      console.error('Error opening leads modal:', error);
       toast({
         title: "Error",
         description: "Failed to load leads",
@@ -272,34 +390,14 @@ export default function Articles() {
     });
   };
 
-  // Truncate text to 2-3 words
-  const truncateText = (text: string, maxWords: number = 3) => {
-    if (!text) return 'null';
-    const words = text.split(' ');
-    if (words.length <= maxWords) return text;
-    return words.slice(0, maxWords).join(' ') + '...';
-  };
 
-  // Get location display
-  const getLocationDisplay = (article: Article) => {
-    const locationParts = [article.city, article.state, article.country].filter(Boolean);
-    return locationParts.length > 0 ? locationParts.join(' → ') : 'null';
-  };
-
-  // Filter articles
-  const filteredArticles = articles.filter(article =>
-    article.article_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    article.type_of_article?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    article.pp_scope?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    article.insights_summary?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading articles...</p>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading articles...</p>
         </div>
       </div>
     );
@@ -388,115 +486,158 @@ export default function Articles() {
             <Button variant="outline">
               <Filter className="h-4 w-4 mr-2" />
               Filters
-            </Button>
+              </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Articles Table */}
+                  {/* Articles Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Articles Overview</CardTitle>
+          <CardTitle>Articles</CardTitle>
           <CardDescription>
-            Total Articles: {filteredArticles.length}
+            Manage and analyze articles with project details, client information, and lead data
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Article ID</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>PP Scope</TableHead>
-                  <TableHead>Insights Summary</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Project Details</TableHead>
-                  <TableHead>Clients</TableHead>
-                  <TableHead>Leads</TableHead>
+                  <TableHead className="w-[120px]">Article ID</TableHead>
+                  <TableHead className="w-[120px]">Type</TableHead>
+                  <TableHead className="w-[200px]">Project Scope</TableHead>
+                  <TableHead className="w-[200px]">Insights Summary</TableHead>
+                  <TableHead className="w-[150px]">Location</TableHead>
+                  <TableHead className="w-[120px]">Project Details</TableHead>
+                  <TableHead className="w-[120px]">Client Details</TableHead>
+                  <TableHead className="w-[100px]">Leads</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredArticles.map((article) => (
-                  <TableRow key={article.article_id} className="hover:bg-muted/50">
+                {articles.map((article) => (
+                  <TableRow key={article.article_id}>
+                    {/* Column 1: Article ID */}
                     <TableCell className="font-mono text-sm">
                       {article.article_id}
                     </TableCell>
                     
+                    {/* Column 2: Type of Article */}
                     <TableCell>
-                      <Badge variant="secondary">
-                        {article.type_of_article || 'null'}
+                      <Badge variant={article.type_of_article === 'PP' ? 'default' : article.type_of_article === 'CP' ? 'secondary' : 'outline'}>
+                        {article.type_of_article || 'N/A'}
                       </Badge>
                     </TableCell>
                     
+                    {/* Column 3: Project Scope (Truncated) */}
                     <TableCell>
-                      <div 
-                        className="cursor-pointer hover:text-primary transition-colors"
-                        onClick={() => openTextModal('Project Scope', article.pp_scope || 'null')}
-                      >
-                        {truncateText(article.pp_scope || 'null')}
-                        <Eye className="inline h-3 w-3 ml-1 text-muted-foreground" />
+                      <div className="max-w-[180px]">
+                        <p className="text-sm text-muted-foreground truncate">
+                          {article.pp_scope ? 
+                            article.pp_scope.split(' ').slice(0, 3).join(' ') + (article.pp_scope.split(' ').length > 3 ? '...' : '')
+                            : 'No scope available'
+                          }
+                        </p>
+                        {article.pp_scope && article.pp_scope.split(' ').length > 3 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800"
+                            onClick={() => openTextModal('Project Scope', article.pp_scope || '')}
+                          >
+                            Click to expand
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                     
+                    {/* Column 4: Insights Summary (Truncated) */}
                     <TableCell>
-                      <div 
-                        className="cursor-pointer hover:text-primary transition-colors"
-                        onClick={() => openTextModal('Insights Summary', article.insights_summary || 'null')}
-                      >
-                        {truncateText(article.insights_summary || 'null')}
-                        <Eye className="inline h-3 w-3 ml-1 text-muted-foreground" />
+                      <div className="max-w-[180px]">
+                        <p className="text-sm text-muted-foreground truncate">
+                          {article.insights_summary ? 
+                            article.insights_summary.split(' ').slice(0, 3).join(' ') + (article.insights_summary.split(' ').length > 3 ? '...' : '')
+                            : 'No insights available'
+                          }
+                        </p>
+                        {article.insights_summary && article.insights_summary.split(' ').length > 3 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800"
+                            onClick={() => openTextModal('Insights Summary', article.insights_summary || '')}
+                          >
+                            Click to expand
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                     
+                    {/* Column 5: Location (Dropdown) */}
                     <TableCell>
                       <div className="flex items-center space-x-1">
-                        <MapPin className="h-3 w-3 text-muted-foreground" />
-                        <span>{getLocationDisplay(article)}</span>
+                        <span className="text-sm">
+                          {article.country || 'N/A'}
+                        </span>
+                        {article.state && (
+                          <>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="text-sm">{article.state}</span>
+                          </>
+                        )}
+                        {article.city && (
+                          <>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="text-sm">{article.city}</span>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                     
+                    {/* Column 6: Project Details Button */}
                     <TableCell>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => openProjectModal(article.article_id)}
-                        className="flex items-center space-x-1"
+                        className="w-full"
                       >
-                        <FileText className="h-3 w-3" />
-                        <span>Project Details</span>
+                        <FileText className="h-4 w-4 mr-2" />
+                        Project Details
                       </Button>
                     </TableCell>
                     
+                    {/* Column 7: Client Details Button */}
                     <TableCell>
                       {article.client_id ? (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => openClientModal(article.client_id!)}
-                          className="flex items-center space-x-1"
+                          onClick={() => openClientModal(article.client_id || '')}
+                          className="w-full"
                         >
-                          <Building2 className="h-3 w-3" />
-                          <span>Client Details</span>
+                          <Building2 className="h-4 w-4 mr-2" />
+                          Client Details
                         </Button>
                       ) : (
-                        <span className="text-muted-foreground">No client</span>
+                        <span className="text-sm text-muted-foreground">No client</span>
                       )}
                     </TableCell>
                     
+                    {/* Column 8: Leads Button */}
                     <TableCell>
                       {article.client_id ? (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => openLeadsModal(article.client_id!)}
-                          className="flex items-center space-x-1"
+                          onClick={() => openLeadsModal(article.client_id || '')}
+                          className="w-full"
                         >
-                          <Users className="h-3 w-3" />
-                          <span>Leads</span>
+                          <Users className="h-4 w-4 mr-2" />
+                          Leads
                         </Button>
                       ) : (
-                        <span className="text-muted-foreground">No leads</span>
+                        <span className="text-sm text-muted-foreground">No client</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -532,11 +673,11 @@ export default function Articles() {
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center space-x-2">
-                <Target className="h-5 w-5" />
+                <FileText className="h-5 w-5" />
                 <span>Project Details</span>
               </DialogTitle>
               <DialogDescription>
-                Detailed information about the project from ses_potential_project
+                Detailed information about the potential project from ses_potential_project
               </DialogDescription>
             </DialogHeader>
             
@@ -545,57 +686,79 @@ export default function Articles() {
                 <div>
                   <Label className="text-sm font-medium">Article ID</Label>
                   <p className="text-sm text-muted-foreground font-mono">
-                    {modalState.data?.article_id || 'null'}
+                    {modalState.data?.article_id || 'Not available'}
                   </p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">Validation Score</Label>
+                  <Label className="text-sm font-medium">Type of Article</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.validation_score || 'null'}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">RD Focus Area</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {modalState.data?.rd_focus_area || 'null'}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Deep Research Info</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {modalState.data?.deep_researchinfo || 'null'}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Recent Announcement</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {modalState.data?.resent_announcement || 'null'}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">PP Stage</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {modalState.data?.pp_stage || 'null'}
+                    {modalState.data?.type_of_article || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Article Date</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.article_date ? 
-                      new Date(modalState.data.article_date).toLocaleDateString() : 'null'
-                    }
+                    {modalState.data?.article_date ? new Date(modalState.data.article_date).toLocaleDateString() : 'Not available'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Location</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {modalState.data?.location || 'Not available'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">City</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {modalState.data?.city || 'Not available'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">State</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {modalState.data?.state || 'Not available'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Country</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {modalState.data?.country || 'Not available'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Client ID</Label>
+                  <p className="text-sm text-muted-foreground font-mono">
+                    {modalState.data?.client_id || 'Not available'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Validation Score</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {modalState.data?.validation_score !== null ? modalState.data.validation_score : 'Not available'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">PP Stage</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {modalState.data?.pp_stage || 'Not available'}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">RD Focus Area</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {modalState.data?.rd_focus_area || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Deep Research Status</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.deep_research_status || 'null'}
+                    {modalState.data?.deep_research_status || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Newsletter Check</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.newsletter_check ? 'Yes' : 'No'}
+                    {modalState.data?.newsletter_check !== null ? (modalState.data.newsletter_check ? 'Yes' : 'No') : 'Not available'}
                   </p>
                 </div>
               </div>
@@ -606,6 +769,46 @@ export default function Articles() {
                   <Label className="text-sm font-medium text-blue-700">News Mentioned Details</Label>
                   <p className="text-sm text-blue-600 mt-2">
                     {modalState.data?.news_mentioned || 'No additional news details available'}
+                  </p>
+                </div>
+              )}
+
+              {/* Show PP Scope if available */}
+              {modalState.data?.pp_scope && (
+                <div>
+                  <Label className="text-sm font-medium">Project Scope</Label>
+                  <p className="text-sm text-muted-foreground mt-2 p-3 bg-gray-50 rounded-lg">
+                    {modalState.data.pp_scope}
+                  </p>
+                </div>
+              )}
+
+              {/* Show Insights Summary if available */}
+              {modalState.data?.insights_summary && (
+                <div>
+                  <Label className="text-sm font-medium">Insights Summary</Label>
+                  <p className="text-sm text-muted-foreground mt-2 p-3 bg-gray-50 rounded-lg">
+                    {modalState.data.insights_summary}
+                  </p>
+                </div>
+              )}
+
+              {/* Show Recent Announcement if available */}
+              {modalState.data?.recent_announcement && (
+                <div>
+                  <Label className="text-sm font-medium">Recent Announcement</Label>
+                  <p className="text-sm text-muted-foreground mt-2 p-3 bg-gray-50 rounded-lg">
+                    {modalState.data.recent_announcement}
+                  </p>
+                </div>
+              )}
+
+              {/* Show Deep Research Info if available */}
+              {modalState.data?.deep_research_info && (
+                <div>
+                  <Label className="text-sm font-medium">Deep Research Info</Label>
+                  <p className="text-sm text-muted-foreground mt-2 p-3 bg-gray-50 rounded-lg">
+                    {modalState.data.deep_research_info}
                   </p>
                 </div>
               )}
@@ -637,91 +840,114 @@ export default function Articles() {
                 <div>
                   <Label className="text-sm font-medium">Client ID</Label>
                   <p className="text-sm text-muted-foreground font-mono">
-                    {modalState.data?.client_id || 'null'}
+                    {modalState.data?.client_id || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Client Name</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.client_name || 'null'}
+                    {modalState.data?.client_name || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Website</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.website || 'null'}
+                    {modalState.data?.website ? (
+                      <a href={modalState.data.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        {modalState.data.website}
+                      </a>
+                    ) : 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Headquarters</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.headquarters || 'null'}
+                    {modalState.data?.headquarters || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Business Size</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.business_size || 'null'}
+                    {modalState.data?.business_size || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Annual Revenue</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.annual_revenue || 'null'}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Products</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {modalState.data?.products || 'null'}
+                    {modalState.data?.annual_revenue || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Type of Client</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.type_of_client || 'null'}
+                    {modalState.data?.type_of_client || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Engagement Advice SES</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.engagement_advise_ses || 'null'}
+                    {modalState.data?.engagement_advise_ses || 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Projects Done</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.no_of_projects_done || 'null'}
+                    {modalState.data?.no_of_projects_done !== null ? modalState.data.no_of_projects_done : 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Projects in Pipeline</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.no_of_projects_in_pipeline || 'null'}
+                    {modalState.data?.no_of_projects_in_pipeline !== null ? modalState.data.no_of_projects_in_pipeline : 'Not available'}
                   </p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Role of Client</Label>
                   <p className="text-sm text-muted-foreground">
-                    {modalState.data?.role_of_client || 'null'}
+                    {modalState.data?.role_of_client || 'Not available'}
                   </p>
                 </div>
               </div>
-              
-              <div>
-                <Label className="text-sm font-medium">Client Overview</Label>
-                <p className="text-sm text-muted-foreground mt-2 p-3 bg-muted rounded-md">
-                  {modalState.data?.client_overview || 'null'}
-                </p>
-              </div>
-              
-              <div className="flex justify-center">
+
+              {/* Show Client Overview if available */}
+              {modalState.data?.client_overview && (
+                <div>
+                  <Label className="text-sm font-medium">Client Overview</Label>
+                  <p className="text-sm text-muted-foreground mt-2 p-3 bg-gray-50 rounded-lg">
+                    {modalState.data.client_overview}
+                  </p>
+                </div>
+              )}
+
+              {/* Show Products if available */}
+              {modalState.data?.products && (
+                <div>
+                  <Label className="text-sm font-medium">Products</Label>
+                  <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                    {Array.isArray(modalState.data.products) ? (
+                      <div className="flex flex-wrap gap-2">
+                        {modalState.data.products.map((product, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            {product}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{modalState.data.products}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Leads Button */}
+              <div className="pt-4 border-t">
                 <Button 
-                  onClick={() => openLeadsModal(modalState.data?.client_id)}
-                  className="flex items-center space-x-2"
+                  onClick={() => openLeadsModal(modalState.data?.client_id || '')}
+                  className="w-full"
+                  variant="outline"
                 >
-                  <Users className="h-4 w-4" />
-                  <span>View Leads</span>
+                  <Users className="h-4 w-4 mr-2" />
+                  View Leads ({modalState.data?.client_id ? 'Available' : 'No Client ID'})
                 </Button>
               </div>
             </div>
@@ -757,49 +983,55 @@ export default function Articles() {
                           <div>
                             <Label className="text-sm font-medium">Full Name</Label>
                             <p className="text-sm text-muted-foreground">
-                              {lead.full_name || 'null'}
+                              {lead.full_name && lead.full_name.trim() ? lead.full_name : 'Not available'}
                             </p>
                           </div>
                           <div>
                             <Label className="text-sm font-medium">Email</Label>
                             <p className="text-sm text-muted-foreground">
-                              {lead.email || 'null'}
+                              {lead.email || 'Not available'}
                             </p>
                           </div>
                           <div>
                             <Label className="text-sm font-medium">Mobile</Label>
                             <p className="text-sm text-muted-foreground">
-                              {lead.mobile || 'null'}
+                              {lead.mobile || 'Not available'}
                             </p>
                           </div>
                           <div>
                             <Label className="text-sm font-medium">LinkedIn</Label>
                             <p className="text-sm text-muted-foreground">
-                              {lead.linkedin || 'null'}
+                              {lead.linkedin ? (
+                                <a href={lead.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                  View Profile
+                                </a>
+                              ) : 'Not available'}
                             </p>
                           </div>
                           <div>
                             <Label className="text-sm font-medium">Designation</Label>
                             <p className="text-sm text-muted-foreground">
-                              {lead.designation || 'null'}
+                              {lead.designation || 'Not available'}
                             </p>
                           </div>
                           <div>
                             <Label className="text-sm font-medium">Seniority</Label>
                             <p className="text-sm text-muted-foreground">
-                              {lead.seniority || 'null'}
+                              {lead.seniority || 'Not available'}
                             </p>
                           </div>
                           <div>
                             <Label className="text-sm font-medium">Lead Type</Label>
                             <p className="text-sm text-muted-foreground">
-                              {lead.lead_type || 'null'}
+                              <Badge variant={lead.lead_type === 'cold' ? 'secondary' : 'default'}>
+                                {lead.lead_type || 'Not available'}
+                              </Badge>
                             </p>
                           </div>
                           <div>
                             <Label className="text-sm font-medium">Lead Source</Label>
                             <p className="text-sm text-muted-foreground">
-                              {lead.lead_source || 'null'}
+                              {lead.lead_source || 'Not available'}
                             </p>
                           </div>
                         </div>

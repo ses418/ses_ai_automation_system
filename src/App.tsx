@@ -15,8 +15,6 @@ import DataManagement from "./pages/DataManagement";
 import Settings from "./pages/Settings";
 import ProposalMaker from "./pages/ProposalMaker";
 
-import { useAuth } from "./hooks/useAuth";
-
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,89 +33,74 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const App = () => {
-  const { isAuthenticated, loading } = useAuth();
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
+        <Routes>
+          {/* Public Routes - No Layout */}
+          <Route path="/signin" element={<SignIn />} />
+          
+          {/* Protected Routes - Wrapped in Layout and ProtectedRoute */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Layout><Dashboard /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/articles" element={
+            <ProtectedRoute>
+              <Layout><Articles /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/conversation-hub" element={
+            <ProtectedRoute>
+              <Layout><ConversationHub /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/linkedin-client-reactivation" element={
+            <ProtectedRoute>
+              <Layout><LinkedInClientReactivation /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/team" element={
+            <ProtectedRoute>
+              <Layout><TeamMembers /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/tasks" element={
+            <ProtectedRoute>
+              <Layout><Tasks /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/data" element={
+            <ProtectedRoute>
+              <Layout><DataManagement /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Layout><Settings /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/proposal-maker" element={
+            <ProtectedRoute>
+              <Layout><ProposalMaker /></Layout>
+            </ProtectedRoute>
+          } />
 
-  if (loading) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <div className="min-h-screen flex items-center justify-center">Loading...</div>
-        </TooltipProvider>
-      </QueryClientProvider>
-    );
-  }
+          {/* Default redirect - if authenticated go to dashboard, otherwise to signin */}
+          <Route path="/" element={
+            isAuthenticated() ? <Navigate to="/dashboard" replace /> : <Navigate to="/signin" replace />
+          } />
 
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            {/* Public Routes - No Layout */}
-            <Route path="/signin" element={<SignIn />} />
-
-            
-            {/* Protected Routes - Wrapped in Layout and ProtectedRoute */}
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
-                <Layout><Dashboard /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/articles" element={
-              <ProtectedRoute>
-                <Layout><Articles /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/conversation-hub" element={
-              <ProtectedRoute>
-                <Layout><ConversationHub /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/linkedin-client-reactivation" element={
-              <ProtectedRoute>
-                <Layout><LinkedInClientReactivation /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/team" element={
-              <ProtectedRoute>
-                <Layout><TeamMembers /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/tasks" element={
-              <ProtectedRoute>
-                <Layout><Tasks /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/data" element={
-              <ProtectedRoute>
-                <Layout><DataManagement /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute>
-                <Layout><Settings /></Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/proposal-maker" element={
-              <ProtectedRoute>
-                <Layout><ProposalMaker /></Layout>
-              </ProtectedRoute>
-            } />
-
-            {/* Default redirect - if authenticated go to dashboard, otherwise to signin */}
-            <Route path="/" element={
-              isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/signin" replace />
-            } />
-
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-};
+          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;

@@ -3,10 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
+import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, Shield, ArrowRight, Sparkles } from 'lucide-react';
 import { AuthService } from '@/services/authService';
-import { useToast } from '@/hooks/use-toast';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -16,7 +15,7 @@ export default function SignIn() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
+  const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Handle mouse movement for dynamic glassmorphism effect
@@ -45,19 +44,13 @@ export default function SignIn() {
     setError('');
     
     try {
-      const { user, error: authError } = await AuthService.signIn(email, password);
+      const result = await AuthService.signIn({ email, password });
       
-      if (authError) {
-        setError(authError);
-        return;
-      }
-
-      if (user) {
-        // Set authentication state
-        localStorage.setItem('isAuthenticated', 'true');
-        
+      if (result.error) {
+        setError(result.error);
+      } else {
         // Navigate to dashboard after successful sign-in
-        window.location.href = '/dashboard';
+        navigate('/dashboard');
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
@@ -254,16 +247,15 @@ export default function SignIn() {
             </CardContent>
           </Card>
 
-          {/* Admin Notice */}
+          {/* Enhanced Footer */}
           <div className="text-center mt-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/20 border border-blue-500/30 rounded-lg">
-              <Shield className="w-4 h-4 text-blue-400" />
-              <p className="text-sm text-blue-200">
-                <strong>Admin Only:</strong> New accounts can only be created by administrators through the Team Members page.
-              </p>
-            </div>
+            <p className="text-sm text-white/70">
+              Don't have an account?{' '}
+              <button className="text-primary-brand hover:text-primary-brand/80 font-medium transition-colors duration-300 hover:underline">
+                Contact your administrator
+              </button>
+            </p>
           </div>
-
         </div>
       </div>
 

@@ -36,7 +36,6 @@ import { useToast } from '@/hooks/use-toast';
 import PageHeader from '@/components/ui/PageHeader';
 import { TeamMembersService } from '@/services/teamMembersService';
 import { TeamMember, TeamMemberFilters } from '@/types/team-members';
-import { supabase } from '@/lib/supabase';
 
 export default function TeamMembers() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,36 +45,13 @@ export default function TeamMembers() {
   const [sortBy, setSortBy] = useState<string>('name');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-  const [currentUser, setCurrentUser] = useState({ isAdmin: false });
+  const [currentUser] = useState({ isAdmin: true }); // Mock current user
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [filteredTeamMembers, setFilteredTeamMembers] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const { toast } = useToast();
-
-  // Check if current user is admin
-  useEffect(() => {
-    const checkAdminStatus = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('is_admin')
-            .eq('id', user.id)
-            .single();
-          
-          setCurrentUser({ isAdmin: profile?.is_admin || false });
-        }
-      } catch (error) {
-        console.error('Error checking admin status:', error);
-        setCurrentUser({ isAdmin: false });
-      }
-    };
-
-    checkAdminStatus();
-  }, []);
 
   // Load team members from Supabase
   useEffect(() => {
@@ -276,13 +252,13 @@ export default function TeamMembers() {
           title="Team Members"
           subtitle="Manage and monitor all team members with comprehensive controls"
           actions={[
-            ...(currentUser.isAdmin ? [{
-              type: 'add' as const,
+            {
+              type: 'add',
               label: 'Add Member',
               onClick: () => setIsAddMemberModalOpen(true)
-            }] : []),
+            },
             {
-              type: 'export' as const,
+              type: 'export',
               label: 'Export List',
               onClick: handleExportList
             }
