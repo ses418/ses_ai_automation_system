@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, Shield, ArrowRight, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, Shield, ArrowRight } from 'lucide-react';
 import { AuthService } from '@/services/authService';
 
 export default function SignIn() {
@@ -122,13 +122,6 @@ export default function SignIn() {
             <p className="text-white/80 text-lg font-medium animate-fade-in-delay">
               Sign in to your account
             </p>
-            
-            {/* Sparkle Effect */}
-            <div className="flex justify-center mt-3 space-x-1">
-              <Sparkles className="w-4 h-4 text-yellow-400 animate-bounce" style={{ animationDelay: '0s' }} />
-              <Sparkles className="w-4 h-4 text-blue-400 animate-bounce" style={{ animationDelay: '0.2s' }} />
-              <Sparkles className="w-4 h-4 text-purple-400 animate-bounce" style={{ animationDelay: '0.4s' }} />
-            </div>
           </div>
 
           {/* Enhanced Sign In Form with Advanced Glassmorphism */}
