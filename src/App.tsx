@@ -8,6 +8,7 @@ import SignIn from "./pages/SignIn";
 import Dashboard from "./pages/Dashboard";
 import Articles from "./pages/Articles";
 import ConversationHub from "./pages/ConversationHub";
+import Newsletter from "./pages/Newsletter";
 import LinkedInClientReactivation from "./pages/LinkedInClientReactivation";
 import TeamMembers from "./pages/TeamMembers";
 import Tasks from "./pages/Tasks";
@@ -57,6 +58,11 @@ const App = () => (
           <Route path="/conversation-hub" element={
             <ProtectedRoute>
               <Layout><ConversationHub /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/newsletter" element={
+            <ProtectedRoute>
+              <Layout><Newsletter /></Layout>
             </ProtectedRoute>
           } />
           <Route path="/linkedin-client-reactivation" element={

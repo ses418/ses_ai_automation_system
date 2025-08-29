@@ -16,6 +16,7 @@ const sidebarItems = [
   { icon: Home, label: "Dashboard", path: "/dashboard" },
   { icon: FileText, label: "Proposal Maker", path: "/proposal-maker" },
   { icon: Mail, label: "Conversation Hub", path: "/conversation-hub" },
+  { icon: Mail, label: "Newsletter", path: "/newsletter" },
   { icon: FileText, label: "Articles", path: "/articles" },
   { icon: Users, label: "Team Members", path: "/team" },
   { icon: ClipboardList, label: "Tasks", path: "/tasks" },
