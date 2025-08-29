@@ -1023,7 +1023,12 @@ export default function Articles() {
               </DialogDescription>
             </DialogHeader>
             
-
+            {/* Debug info */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mb-4 p-2 bg-yellow-100 text-xs">
+                Debug: Modal data = {JSON.stringify(modalState.data, null, 2)}
+              </div>
+            )}
             
             <div className="space-y-6 py-4">
               <div className="grid grid-cols-2 gap-4">
@@ -1126,6 +1131,10 @@ export default function Articles() {
                 )}
               </div>
             </div>
+            
+            <DialogFooter>
+              <Button onClick={closeModal}>Close</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
@@ -1144,7 +1153,12 @@ export default function Articles() {
               </DialogDescription>
             </DialogHeader>
             
-
+            {/* Debug info */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mb-4 p-2 bg-yellow-100 text-xs">
+                Debug: Leads data = {JSON.stringify(modalState.data, null, 2)}
+              </div>
+            )}
             
             <div className="space-y-4 py-4">
               {modalState.data?.leads && modalState.data.leads.length > 0 ? (
