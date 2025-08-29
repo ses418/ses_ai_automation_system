@@ -338,7 +338,11 @@ export default function Newsletter() {
           {isLoading && (
             <div className="text-center py-12">
               <div className="inline-flex items-center justify-center w-20 h-20 bg-white/70 backdrop-blur-md rounded-full shadow-xl animate-bounce">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+                <img 
+          src="/ses-logo.png" 
+          alt="SES Logo Loading" 
+          className="w-24 h-24 mx-auto animate-pulse animate-spin"
+        />
               </div>
               <p className="text-gray-600 text-lg mt-6 font-medium animate-pulse">Loading newsletters...</p>
             </div>

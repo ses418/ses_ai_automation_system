@@ -9,6 +9,8 @@ export interface AuthUser {
   status: string;
   department?: string;
   role?: string;
+  avatar_url?: string;
+  last_sign_in_at?: string;
 }
 
 export interface LoginCredentials {
@@ -26,33 +28,39 @@ export interface RegisterData {
   location?: string;
 }
 
+export interface AuthResponse {
+  user: AuthUser | null;
+  error?: string;
+  session?: any;
+}
+
 export class AuthService {
   private static currentUser: AuthUser | null = null;
+  private static authListener: (() => void) | null = null;
 
   /**
-   * Initialize authentication state
+   * Initialize authentication state from session
    */
   static async initialize(): Promise<AuthUser | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Get current session
+      const { data: { session }, error } = await supabase.auth.getSession();
       
-      if (user) {
+      if (error) {
+        console.error('Error getting session:', error);
+        return null;
+      }
+
+      if (session?.user) {
         // Get team member profile
-        const profile = await this.getTeamMemberProfile(user.id);
-        if (profile) {
-          this.currentUser = {
-            id: profile.id,
-            email: profile.email,
-            name: profile.name,
-            is_admin: profile.is_admin,
-            status: profile.status,
-            department: profile.department,
-            role: profile.role
-          };
+        const profile = await this.getTeamMemberProfileByEmail(session.user.email!);
+        if (profile && profile.status === 'active') {
+          this.currentUser = this.mapTeamMemberToAuthUser(profile);
+          return this.currentUser;
         }
       }
       
-      return this.currentUser;
+      return null;
     } catch (error) {
       console.error('Error initializing auth:', error);
       return null;
@@ -74,6 +82,23 @@ export class AuthService {
   }
 
   /**
+   * Check if user has a valid session
+   */
+  static async hasValidSession(): Promise<boolean> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return false;
+      
+      // Verify user profile exists and is active
+      const profile = await this.getTeamMemberProfileByEmail(session.user.email!);
+      return profile !== null && profile.status === 'active';
+    } catch (error) {
+      console.error('Error checking session validity:', error);
+      return false;
+    }
+  }
+
+  /**
    * Check if user is admin
    */
   static isAdmin(): boolean {
@@ -88,11 +113,19 @@ export class AuthService {
   }
 
   /**
-   * Sign up with Supabase Auth and create team member profile
+   * Sign up with proper Supabase Auth
    */
-  static async signUp(data: RegisterData): Promise<{ user: AuthUser; error?: string }> {
+  static async signUp(data: RegisterData): Promise<AuthResponse> {
     try {
-      // First, create the user in Supabase Auth
+      // Validate password strength
+      if (!this.isPasswordStrong(data.password)) {
+        return { 
+          user: null, 
+          error: 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character' 
+        };
+      }
+
+      // Create user in Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -102,104 +135,109 @@ export class AuthService {
             department: data.department,
             role: data.role,
             location: data.location
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       });
 
       if (authError) {
-        return { user: null as any, error: authError.message };
+        return { user: null, error: authError.message };
       }
 
       if (!authData.user) {
-        return { user: null as any, error: 'Failed to create user' };
+        return { user: null, error: 'Failed to create user account' };
       }
 
-      // Create team member profile using the secure function
+      // Create team member profile
       const { data: profile, error: profileError } = await supabase
-        .rpc('create_team_member_with_auth', {
-          p_name: data.name,
-          p_email: data.email,
-          p_password_hash: 'supabase_auth', // We're using Supabase Auth, so this is just a placeholder
-          p_phone: data.phone,
-          p_department: data.department,
-          p_role: data.role,
-          p_location: data.location,
-          p_status: 'pending', // New users start as pending
-          p_is_admin: false
-        });
+        .from('team_members')
+        .insert([{
+          id: authData.user.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          department: data.department,
+          role: data.role,
+          location: data.location,
+          status: 'pending',
+          is_admin: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
 
       if (profileError) {
-        // If profile creation fails, we should clean up the auth user
+        // Clean up auth user if profile creation fails
         await supabase.auth.admin.deleteUser(authData.user.id);
-        return { user: null as any, error: profileError.message };
+        return { user: null, error: profileError.message };
       }
 
-      // Set current user
-      this.currentUser = {
-        id: profile,
-        email: data.email,
-        name: data.name,
-        is_admin: false,
-        status: 'pending',
-        department: data.department,
-        role: data.role
-      };
+      // Send verification email
+      await supabase.auth.resend({
+        type: 'signup',
+        email: data.email
+      });
 
-      return { user: this.currentUser };
+      return { 
+        user: null, 
+        error: 'Account created successfully. Please check your email to verify your account before signing in.' 
+      };
     } catch (error) {
       console.error('Error in signUp:', error);
-      return { user: null as any, error: 'An unexpected error occurred' };
+      return { user: null, error: 'An unexpected error occurred during account creation' };
     }
   }
 
   /**
-   * Sign in with email and password
+   * Sign in with proper Supabase Auth
    */
-  static async signIn(credentials: LoginCredentials): Promise<{ user: AuthUser; error?: string }> {
+  static async signIn(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
+      // Validate input
+      if (!credentials.email || !credentials.password) {
+        return { user: null, error: 'Email and password are required' };
+      }
+
+      // Sign in with Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password
       });
 
       if (error) {
-        return { user: null as any, error: error.message };
+        return { user: null, error: this.getUserFriendlyError(error.message) };
       }
 
       if (!data.user) {
-        return { user: null as any, error: 'No user returned from authentication' };
+        return { user: null, error: 'Authentication failed' };
       }
 
       // Get team member profile
-      const profile = await this.getTeamMemberProfile(data.user.id);
+      const profile = await this.getTeamMemberProfileByEmail(data.user.email!);
       if (!profile) {
-        console.error('No team member profile found for email:', data.user.email);
-        return { user: null as any, error: `Team member profile not found for email: ${data.user.email}. Please contact an administrator.` };
+        await supabase.auth.signOut();
+        return { user: null, error: 'User profile not found. Please contact an administrator.' };
       }
 
       if (profile.status !== 'active') {
         await supabase.auth.signOut();
-        return { user: null as any, error: 'Account is not active. Please contact an administrator.' };
+        return { user: null, error: 'Account is not active. Please contact an administrator.' };
       }
 
-      // Set current user
-      this.currentUser = {
-        id: profile.id,
-        email: profile.email,
-        name: profile.name,
-        is_admin: profile.is_admin,
-        status: profile.status,
-        department: profile.department,
-        role: profile.role
-      };
+      // Map to auth user
+      this.currentUser = this.mapTeamMemberToAuthUser(profile);
 
       // Update last login
       await this.updateLastLogin(profile.id);
 
-      return { user: this.currentUser };
+      // Set up auth state listener
+      this.setupAuthStateListener();
+
+      return { user: this.currentUser, session: data.session };
     } catch (error) {
       console.error('Error in signIn:', error);
-      return { user: null as any, error: 'An unexpected error occurred' };
+      return { user: null, error: 'An unexpected error occurred during authentication' };
     }
   }
 
@@ -210,47 +248,75 @@ export class AuthService {
     try {
       await supabase.auth.signOut();
       this.currentUser = null;
+      
+      if (this.authListener) {
+        this.authListener();
+        this.authListener = null;
+      }
     } catch (error) {
       console.error('Error in signOut:', error);
     }
   }
 
   /**
-   * Get team member profile by auth user email
+   * Get team member profile by email
    */
-  private static async getTeamMemberProfile(authUserId: string): Promise<TeamMember | null> {
+  static async getTeamMemberProfileByEmail(email: string): Promise<TeamMember | null> {
     try {
-      // Get current user from session
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError) {
-        console.error('Error fetching current user:', userError);
-        return null;
-      }
-
-      if (!user || !user.email) {
-        console.error('No email found for current user');
-        return null;
-      }
-
-      console.log('Looking for team member with email:', user.email);
-
-      // Find team member by email
-      const { data, error } = await supabase
+      // First try to get from team_members table
+      let { data, error } = await supabase
         .from('team_members')
         .select('*')
-        .eq('email', user.email)
-        .single();
+        .eq('email', email)
+        .maybeSingle();
 
       if (error) {
-        console.error('Error fetching team member profile by email:', error);
+        console.error('Error fetching team member profile from team_members:', error);
         return null;
       }
 
-      console.log('Found team member profile:', data);
-      return data;
+      // If found in team_members, return it
+      if (data) {
+        return data;
+      }
+
+      // If not found in team_members, try profiles table as fallback
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('Error fetching profile from profiles table:', profileError);
+        return null;
+      }
+
+      // If found in profiles, convert to TeamMember format
+      if (profileData) {
+        return {
+          id: profileData.id,
+          name: profileData.name,
+          email: profileData.email,
+          password_hash: '',
+          phone: profileData.phone || '',
+          department: profileData.department || '',
+          role: profileData.role || '',
+          location: profileData.location || '',
+          status: profileData.status || 'active',
+          dashboard_access: profileData.dashboard_access || 'visible',
+          profile_picture: profileData.profile_picture || '',
+          date_added: profileData.created_at,
+          last_login: profileData.updated_at,
+          is_admin: profileData.is_admin || false,
+          created_at: profileData.created_at,
+          updated_at: profileData.updated_at
+        };
+      }
+
+      return null;
     } catch (error) {
-      console.error('Error in getTeamMemberProfile:', error);
+      console.error('Error in getTeamMemberProfileByEmail:', error);
       return null;
     }
   }
@@ -262,7 +328,10 @@ export class AuthService {
     try {
       const { error } = await supabase
         .from('team_members')
-        .update({ last_login: new Date().toISOString() })
+        .update({ 
+          last_login: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
         .eq('id', teamMemberId);
 
       if (error) {
@@ -270,6 +339,124 @@ export class AuthService {
       }
     } catch (error) {
       console.error('Error in updateLastLogin:', error);
+    }
+  }
+
+  /**
+   * Map team member to auth user
+   */
+  static mapTeamMemberToAuthUser(profile: TeamMember): AuthUser {
+    return {
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      is_admin: profile.is_admin,
+      status: profile.status,
+      department: profile.department,
+      role: profile.role,
+      avatar_url: profile.profile_picture,
+      last_sign_in_at: profile.last_login
+    };
+  }
+
+  /**
+   * Setup authentication state listener
+   */
+  private static setupAuthStateListener(): void {
+    if (this.authListener) {
+      this.authListener();
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const profile = await this.getTeamMemberProfileByEmail(session.user.email!);
+        if (profile && profile.status === 'active') {
+          this.currentUser = this.mapTeamMemberToAuthUser(profile);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        this.currentUser = null;
+      } else if (event === 'TOKEN_REFRESHED') {
+        // Handle token refresh
+        console.log('Token refreshed');
+      }
+    });
+
+    this.authListener = () => subscription.unsubscribe();
+  }
+
+  /**
+   * Validate password strength
+   */
+  private static isPasswordStrong(password: string): boolean {
+    const minLength = 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+    return password.length >= minLength && hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar;
+  }
+
+  /**
+   * Get user-friendly error messages
+   */
+  private static getUserFriendlyError(error: string): string {
+    if (error.includes('Invalid login credentials')) {
+      return 'Invalid email or password. Please check your credentials and try again.';
+    }
+    if (error.includes('Email not confirmed')) {
+      return 'Please verify your email address before signing in.';
+    }
+    if (error.includes('Too many requests')) {
+      return 'Too many login attempts. Please try again later.';
+    }
+    return error;
+  }
+
+  /**
+   * Change password
+   */
+  static async changePassword(newPassword: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (!this.isPasswordStrong(newPassword)) {
+        return { 
+          success: false, 
+          error: 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character' 
+        };
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in changePassword:', error);
+      return { success: false, error: 'An unexpected error occurred' };
+    }
+  }
+
+  /**
+   * Reset password
+   */
+  static async resetPassword(email: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in resetPassword:', error);
+      return { success: false, error: 'An unexpected error occurred' };
     }
   }
 
@@ -283,14 +470,17 @@ export class AuthService {
       }
 
       const { data, error } = await supabase
-        .rpc('get_current_user_profile');
+        .from('team_members')
+        .select('*')
+        .eq('id', this.currentUser.id)
+        .single();
 
       if (error) {
         console.error('Error fetching current user profile:', error);
         return null;
       }
 
-      return data[0] || null;
+      return data;
     } catch (error) {
       console.error('Error in getCurrentUserProfile:', error);
       return null;
@@ -308,7 +498,10 @@ export class AuthService {
 
       const { data, error } = await supabase
         .from('team_members')
-        .update(updateData)
+        .update({
+          ...updateData,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', this.currentUser.id)
         .select()
         .single();
@@ -332,70 +525,40 @@ export class AuthService {
   }
 
   /**
-   * Change password
+   * Refresh session
    */
-  static async changePassword(newPassword: string): Promise<{ success: boolean; error?: string }> {
+  static async refreshSession(): Promise<boolean> {
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-
+      const { data, error } = await supabase.auth.refreshSession();
+      
       if (error) {
-        return { success: false, error: error.message };
+        console.error('Error refreshing session:', error);
+        return false;
       }
 
-      return { success: true };
+      return !!data.session;
     } catch (error) {
-      console.error('Error in changePassword:', error);
-      return { success: false, error: 'An unexpected error occurred' };
+      console.error('Error in refreshSession:', error);
+      return false;
     }
   }
 
   /**
-   * Reset password
+   * Get session
    */
-  static async resetPassword(email: string): Promise<{ success: boolean; error?: string }> {
+  static async getSession(): Promise<any> {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
-      });
-
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
       if (error) {
-        return { success: false, error: error.message };
+        console.error('Error getting session:', error);
+        return null;
       }
 
-      return { success: true };
+      return session;
     } catch (error) {
-      console.error('Error in resetPassword:', error);
-      return { success: false, error: 'An unexpected error occurred' };
+      console.error('Error in getSession:', error);
+      return null;
     }
-  }
-
-  /**
-   * Listen to authentication state changes
-   */
-  static onAuthStateChange(callback: (user: AuthUser | null) => void): () => void {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        const profile = await this.getTeamMemberProfile(session.user.id);
-        if (profile) {
-          this.currentUser = {
-            id: profile.id,
-            email: profile.email,
-            name: profile.name,
-            is_admin: profile.is_admin,
-            status: profile.status,
-            department: profile.department,
-            role: profile.role
-          };
-          callback(this.currentUser);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        this.currentUser = null;
-        callback(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }
 }

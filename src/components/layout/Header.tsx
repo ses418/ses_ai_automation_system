@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Bell, Search, MessageCircle, User } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Bell, Search, MessageCircle, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,9 +11,72 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import PersonalSettingsModal from "@/components/PersonalSettingsModal";
+import { AuthService } from "@/services/authService";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 
 export const Header = () => {
   const [isPersonalSettingsOpen, setIsPersonalSettingsOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Initialize auth state immediately
+    const initAuth = async () => {
+      try {
+        const user = await AuthService.initialize();
+        setCurrentUser(user);
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initAuth();
+
+    // Set up auth state listener for real-time updates
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        // Get user profile when signed in
+        const profile = await AuthService.getTeamMemberProfileByEmail(session.user.email!);
+        if (profile && profile.status === 'active') {
+          setCurrentUser(AuthService.mapTeamMemberToAuthUser(profile));
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await AuthService.signOut();
+      setCurrentUser(null);
+      navigate('/signin');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  // Don't render header if still loading or no user
+  if (isLoading || !currentUser) {
+    return (
+                        <div className="min-h-screen flex items-center justify-center">
+                    <div className="text-center">
+                      <img 
+                        src="/ses-logo.png" 
+                        alt="SES Logo Loading" 
+                        className="w-24 h-24 mx-auto mb-4 animate-pulse animate-spin"
+                      />
+                      <p className="text-primary-brand text-lg font-medium animate-pulse">Loading...</p>
+                    </div>
+                  </div>
+    );
+  }
 
   return (
     <>
@@ -22,9 +85,9 @@ export const Header = () => {
           {/* Left: Logo & App Name */}
           <div className="flex items-center gap-4">
             <img 
-              src="/ses-logo.png" 
+              src="/Logo.png" 
               alt="SES Logo" 
-              className="w-10 h-10"
+              className="w-20 h-20 object-contain"
             />
             <h1 className="text-xl font-semibold text-primary-brand">Shiva Engineering Services</h1>
           </div>
@@ -52,22 +115,35 @@ export const Header = () => {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full glass-button hover-primary-brand-light">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src="/api/placeholder/32/32" alt="Profile" />
-                    <AvatarFallback className="gradient-primary text-white">
-                      <User className="h-4 w-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
+                                  <Button variant="ghost" className="relative h-8 w-8 rounded-full glass-button hover-primary-brand-light">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={currentUser?.avatar_url || "/api/placeholder/32/32"} alt="Profile" />
+                      <AvatarFallback className="gradient-primary text-white">
+                        {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : <User className="h-4 w-4" />}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56 modal-glass" align="end">
-                <DropdownMenuItem>My Profile</DropdownMenuItem>
+                <DropdownMenuItem>
+                  <User className="h-4 w-4 mr-2" />
+                  {currentUser?.name || 'User'}
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <span className="text-sm text-muted-foreground">{currentUser?.email}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setIsPersonalSettingsOpen(true)}>
                   Personal Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">Logout</DropdownMenuItem>
+                <DropdownMenuItem 
+                  className="text-destructive cursor-pointer" 
+                  onClick={handleLogout}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

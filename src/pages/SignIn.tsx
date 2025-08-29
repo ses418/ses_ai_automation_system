@@ -14,6 +14,7 @@ export default function SignIn() {
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -48,9 +49,19 @@ export default function SignIn() {
       
       if (result.error) {
         setError(result.error);
+        setSuccess('');
+      } else if (result.user) {
+        // Successfully authenticated
+        setError('');
+        setSuccess('Authentication successful! Redirecting...');
+        
+        // Show success message briefly before redirecting
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1000);
       } else {
-        // Navigate to dashboard after successful sign-in
-        navigate('/dashboard');
+        setError('Authentication failed. Please check your credentials.');
+        setSuccess('');
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
@@ -104,31 +115,31 @@ export default function SignIn() {
       />
 
       {/* Main Content */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-6">
+        <div className="w-full max-w-lg">
           {/* Logo and App Name */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             {/* Logo - Direct image with rotation */}
             <img 
-              src="/ses-logo.png" 
+              src="/Logo.png" 
               alt="SES Logo" 
-              className="w-20 h-20 mx-auto mb-6"
+              className="w-40 h-40 mx-auto mb-0 object-contain"
             />
             
-            {/* Company Name - Single line, no wrapping */}
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent mb-2 animate-fade-in whitespace-nowrap">
-              Shiva Engineering Services
+            {/* Company Name - Better spacing */}
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-indigo-400 bg-clip-text text-transparent mb-3 animate-fade-in whitespace-nowrap">
+              SHIVA ENGINEERING SERVICES
             </h1>
-            <p className="text-white/80 text-lg font-medium animate-fade-in-delay">
+            <p className="text-white/80 text-base font-medium animate-fade-in-delay">
               Sign in to your account
             </p>
           </div>
 
           {/* Enhanced Sign In Form with Advanced Glassmorphism */}
           <Card className="backdrop-blur-xl bg-white/10 border-white/20 shadow-2xl animate-fade-in-up">
-            <CardHeader className="text-center pb-6">
-              <CardTitle className="text-2xl font-semibold text-white flex items-center justify-center gap-2">
-                <Shield className="w-6 h-6 text-primary-brand" />
+            <CardHeader className="text-center pb-4">
+              <CardTitle className="text-xl font-semibold text-white flex items-center justify-center gap-2">
+                <Shield className="w-5 h-5 text-primary-brand" />
                 Secure Access
               </CardTitle>
               <p className="text-white/70 text-sm">
@@ -136,12 +147,19 @@ export default function SignIn() {
               </p>
             </CardHeader>
             
-            <CardContent className="space-y-6">
-              <form onSubmit={handleSignIn} className="space-y-6">
+            <CardContent className="space-y-4">
+              <form onSubmit={handleSignIn} className="space-y-4">
                 {/* Error Message */}
                 {error && (
                   <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3 text-red-200 text-sm">
                     {error}
+                  </div>
+                )}
+
+                {/* Success Message */}
+                {success && (
+                  <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3 text-green-200 text-sm">
+                    {success}
                   </div>
                 )}
 
@@ -248,6 +266,7 @@ export default function SignIn() {
                 Contact your administrator
               </button>
             </p>
+
           </div>
         </div>
       </div>

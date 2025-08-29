@@ -45,7 +45,7 @@ export default function TeamMembers() {
   const [sortBy, setSortBy] = useState<string>('name');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-  const [currentUser] = useState({ isAdmin: true }); // Mock current user
+  const [currentUser, setCurrentUser] = useState({ isAdmin: false, isHeadOfSES: false });
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [filteredTeamMembers, setFilteredTeamMembers] = useState<TeamMember[]>([]);
@@ -53,18 +53,28 @@ export default function TeamMembers() {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const { toast } = useToast();
 
-  // Load team members from Supabase
+  // Check admin status and load team members
   useEffect(() => {
-    const loadTeamMembers = async () => {
+    const checkAdminStatusAndLoadMembers = async () => {
       try {
         setIsInitialLoading(true);
-        console.log('Loading team members from Supabase...');
+        
+        // Check if current user is admin or head of SES
+        const isAdminOrHeadOfSES = await TeamMembersService.isAdminOrHeadOfSES();
+        const { data: { user } } = await import('@/lib/supabase').then(m => m.supabase.auth.getUser());
+        
+        setCurrentUser({
+          isAdmin: user?.email === 'marketing@shiva-engineering.com',
+          isHeadOfSES: user?.user_metadata?.role === 'head_of_ses'
+        });
+
+        // Load team members
         const members = await TeamMembersService.getTeamMembers();
-        console.log('Team members loaded:', members);
         setTeamMembers(members);
         setFilteredTeamMembers(members);
+        
       } catch (error) {
-        console.error('Error loading team members:', error);
+        console.error('Error checking admin status or loading team members:', error);
         toast({
           title: "Error",
           description: `Failed to load team members: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -75,8 +85,8 @@ export default function TeamMembers() {
       }
     };
 
-    loadTeamMembers();
-  }, [toast]);
+    checkAdminStatusAndLoadMembers();
+  }, []); // Remove toast dependency to prevent re-renders
 
   // Apply sorting to filtered members
   const sortedMembers = [...filteredTeamMembers].sort((a, b) => {
@@ -167,55 +177,25 @@ export default function TeamMembers() {
     );
   };
 
-  const handleAddMember = async (memberData: any) => {
+  const handleRefreshMembers = async () => {
     try {
-      setIsLoading(true);
-      console.log('Adding new team member:', memberData);
-
-      // Create the new team member using the service
-      const newMember = await TeamMembersService.createTeamMember({
-        name: memberData.name,
-        email: memberData.email,
-        password: memberData.password,
-        phone: memberData.phone,
-        department: memberData.department,
-        role: memberData.role,
-        location: memberData.location
-      });
-
-      console.log('New member created:', newMember);
-
+      console.log('Refreshing team members list...');
+      
       // Refresh the team members list
       const updatedMembers = await TeamMembersService.getTeamMembers();
       console.log('Updated members list:', updatedMembers);
       setTeamMembers(updatedMembers);
       setFilteredTeamMembers(updatedMembers);
-
-      toast({
-        title: "Success",
-        description: "Team member added successfully!"
-      });
-
-      setIsAddMemberModalOpen(false);
-    } catch (error) {
-      console.error('Error adding team member:', error);
       
-      // Check if it's an RLS error
-      if (error instanceof Error && error.message.includes('row-level security policy')) {
-        toast({
-          title: "RLS Policy Error",
-          description: "The database security policy is blocking this operation. Please run the SQL script in Supabase to fix this.",
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: `Failed to add team member: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          variant: "destructive"
-        });
-      }
-    } finally {
-      setIsLoading(false);
+      console.log('Team members list refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing team members:', error);
+      
+      toast({
+        title: "Warning",
+        description: "Member added but failed to refresh the list. Please refresh the page.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -252,11 +232,11 @@ export default function TeamMembers() {
           title="Team Members"
           subtitle="Manage and monitor all team members with comprehensive controls"
           actions={[
-            {
+            ...(currentUser.isAdmin || currentUser.isHeadOfSES ? [{
               type: 'add',
               label: 'Add Member',
               onClick: () => setIsAddMemberModalOpen(true)
-            },
+            }] : []),
             {
               type: 'export',
               label: 'Export List',
@@ -265,6 +245,24 @@ export default function TeamMembers() {
           ]}
         />
       </div>
+
+      {/* Access Control Message */}
+      {!currentUser.isAdmin && !currentUser.isHeadOfSES && (
+        <Card className="bg-yellow-50 border-yellow-200 mb-6">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <Shield className="w-6 h-6 text-yellow-600" />
+              <div>
+                <h3 className="font-semibold text-yellow-800">Access Restricted</h3>
+                <p className="text-yellow-700 text-sm">
+                  Only Admin users and Head of SES can access the Team Members page. 
+                  Contact your administrator for access.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Analytics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
@@ -483,8 +481,12 @@ export default function TeamMembers() {
         <Card className="bg-white/70 backdrop-blur-md border-white/20 shadow-lg mb-6">
           <CardContent className="p-8">
             <div className="flex items-center justify-center space-x-3">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="text-gray-600">Loading team members...</span>
+                              <img 
+           src="/ses-logo.png" 
+           alt="SES Logo Loading" 
+           className="w-24 h-24 mx-auto animate-pulse animate-spin"
+         />
+                <span className="text-gray-600 animate-pulse">Loading team members...</span>
             </div>
           </CardContent>
         </Card>
@@ -776,11 +778,11 @@ export default function TeamMembers() {
       )}
 
       {/* Add Member Modal */}
-      <AddMemberModal
-        isOpen={isAddMemberModalOpen}
-        onClose={() => setIsAddMemberModalOpen(false)}
-        onMemberAdded={handleAddMember}
-      />
+              <AddMemberModal
+          isOpen={isAddMemberModalOpen}
+          onClose={() => setIsAddMemberModalOpen(false)}
+          onSuccess={handleRefreshMembers}
+        />
     </div>
   );
 }

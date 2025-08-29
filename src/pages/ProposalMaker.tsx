@@ -24,7 +24,8 @@ import {
   Globe,
   MapPin,
   User,
-  FileImage
+  FileImage,
+  Edit
 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { supabase } from '@/lib/supabase';
@@ -208,6 +209,7 @@ const ProposalMaker: React.FC = () => {
         .from('inquiries')
         .update({
           inquiry_approval: 'approved',
+          classification: selectedClassification, // Save selected classification
           updated_by: 1, // Assuming user ID 1 for now
           updated_at: new Date().toISOString(),
         })
@@ -220,7 +222,7 @@ const ProposalMaker: React.FC = () => {
       // Update local state
       setInquiries(prev => prev.map(inq => 
         inq.inquiry_id === selectedInquiry.inquiry_id 
-          ? { ...inq, inquiry_approval: 'approved' }
+          ? { ...inq, inquiry_approval: 'approved', classification: selectedClassification }
           : inq
       ));
 
@@ -308,6 +310,7 @@ const ProposalMaker: React.FC = () => {
   const handleApprovalClick = (e: React.MouseEvent, inquiry: Inquiry) => {
     e.stopPropagation();
     setSelectedInquiry(inquiry);
+    setSelectedClassification(inquiry.classification as 'greenfield' | 'brownfield');
     setShowApprovalModal(true);
   };
 
@@ -498,8 +501,12 @@ const ProposalMaker: React.FC = () => {
                 <div className="space-y-4">
                   {isLoading ? (
                     <div className="text-center py-12">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                      <p className="text-gray-600">Loading inquiries...</p>
+                                             <img 
+           src="/ses-logo.png" 
+           alt="SES Logo Loading" 
+           className="w-24 h-24 mx-auto mb-4 animate-pulse animate-spin"
+         />
+                       <p className="text-gray-600 animate-pulse">Loading inquiries...</p>
                     </div>
                   ) : inquiries.length === 0 ? (
                     <div className="text-center py-12">
@@ -969,6 +976,29 @@ const ProposalMaker: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Classification Selection */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h4 className="font-medium text-gray-800 mb-3">Select Classification:</h4>
+              <RadioGroup 
+                value={selectedClassification} 
+                onValueChange={(value: 'greenfield' | 'brownfield') => setSelectedClassification(value)}
+                className="space-y-3"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="greenfield" id="approval-greenfield" />
+                  <Label htmlFor="approval-greenfield" className="text-green-700 font-medium cursor-pointer">
+                    Greenfield
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="brownfield" id="approval-brownfield" />
+                  <Label htmlFor="approval-brownfield" className="text-amber-700 font-medium cursor-pointer">
+                    Brownfield
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
             
             <div className="flex justify-end gap-3 pt-4">
               <Button 

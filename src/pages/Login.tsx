@@ -151,8 +151,12 @@ export default function Login() {
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>Signing In...</span>
+                    <img 
+                      src="/ses-logo.png" 
+                      alt="SES Logo Loading" 
+                      className="w-4 h-4 animate-pulse animate-spin"
+                    />
+                    <span className="animate-pulse">Signing In...</span>
                   </div>
                 ) : (
                   'Sign In'

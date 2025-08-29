@@ -14,9 +14,9 @@ export class TeamMembersService {
     try {
       console.log('TeamMembersService.getTeamMembers called with filters:', filters);
       
-      // Use the secure view that respects RLS policies
+      // Use the team_members table directly
       let query = supabase
-        .from('secure_team_members_view')
+        .from('team_members')
         .select('*')
         .order('date_added', { ascending: false });
 
@@ -264,7 +264,7 @@ export class TeamMembersService {
   static async getAdminTeamMembers(): Promise<TeamMember[]> {
     try {
       const { data, error } = await supabase
-        .from('secure_team_members_view')
+        .from('team_members')
         .select('*')
         .eq('is_admin', true)
         .order('date_added', { ascending: false });
@@ -287,7 +287,7 @@ export class TeamMembersService {
   static async getTeamMemberCountByDepartment(): Promise<Record<string, number>> {
     try {
       const { data, error } = await supabase
-        .from('secure_team_members_view')
+        .from('team_members')
         .select('department')
         .not('department', 'is', null);
 
@@ -350,6 +350,172 @@ export class TeamMembersService {
     } catch (error) {
       console.error('Error in updateCurrentUserProfile:', error);
       return null;
+    }
+  }
+
+  /**
+   * Get department options for dropdown
+   */
+  static getDepartmentOptions(): string[] {
+    return [
+      'Head of SES',
+      'Business and Development',
+      'Project',
+      'Process Engineering',
+      'Electrical Engineering',
+      'Mechanical Engineering',
+      'Instrumental Engineering',
+      'Civil & Structural Engineering',
+      'Piping Engineering',
+      'Procurement',
+      'Construction'
+    ];
+  }
+
+  /**
+   * Get role options based on department
+   */
+  static getRoleOptionsByDepartment(department: string): string[] {
+    if (department === 'Head of SES') {
+      return ['Head of SES'];
+    } else if (department === 'Business and Development') {
+      return ['Head of Department', 'Manager', 'Engineer'];
+    } else {
+      return ['Head of Department', 'Manager', 'Engineer', 'Designer'];
+    }
+  }
+
+  /**
+   * Add new team member with authentication
+   */
+  static async addNewTeamMember(memberData: {
+    full_name: string;
+    email: string;
+    password: string;
+    phone: string;
+    department: string;
+    role: string;
+    location?: string;
+  }): Promise<{ success: boolean; message: string; userId?: string }> {
+    try {
+      console.log('Adding team member:', memberData);
+
+      // Step 1: Store in add_members_form_details table
+      console.log('Step 1: Inserting into add_members_form_details table...');
+      const { data: formData, error: formError } = await supabase
+        .from('add_members_form_details')
+        .insert({
+          full_name: memberData.full_name,
+          email: memberData.email,
+          department: memberData.department,
+          role: memberData.role
+        })
+        .select();
+
+      if (formError) {
+        console.error('Error storing form details:', formError);
+        return { success: false, message: `Failed to store form details: ${formError.message}` };
+      }
+      console.log('Step 1 completed successfully:', formData);
+
+      // Step 2: Store in team_members table
+      console.log('Step 2: Inserting into team_members table...');
+      const { data: teamData, error: teamError } = await supabase
+        .from('team_members')
+        .insert({
+          name: memberData.full_name,
+          email: memberData.email,
+          password_hash: memberData.password,
+          phone: memberData.phone,
+          department: memberData.department,
+          role: memberData.role,
+          location: memberData.location,
+          status: 'active',
+          dashboard_access: 'visible',
+          is_admin: memberData.role === 'Head of SES'
+        })
+        .select();
+
+      if (teamError) {
+        console.error('Error storing team member:', teamError);
+        return { success: false, message: `Failed to store team member: ${teamError.message}` };
+      }
+      console.log('Step 2 completed successfully:', teamData);
+
+      return { 
+        success: true, 
+        message: 'Team member added successfully!',
+        userId: undefined
+      };
+    } catch (error) {
+      console.error('Error in addNewTeamMember:', error);
+      return { success: false, message: 'Failed to add team member. Please try again.' };
+    }
+  }
+
+  /**
+   * Check if current user is admin or head of SES
+   */
+  static async isAdminOrHeadOfSES(): Promise<boolean> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('No user found in auth');
+        return false;
+      }
+
+      console.log('Checking admin access for user:', user.email);
+      console.log('User metadata:', user.user_metadata);
+
+      // Check if user is admin (more flexible check)
+      if (user.email && user.email.includes('marketing@shiva-engineering')) {
+        console.log('User is admin (email match)');
+        return true;
+      }
+
+      // Check if user has head_of_ses role
+      if (user.user_metadata?.role === 'head_of_ses') {
+        console.log('User is head of SES (role match)');
+        return true;
+      }
+
+      // Check if user exists in team_members with admin role
+      try {
+        const { data: teamMember } = await supabase
+          .from('team_members')
+          .select('is_admin, role')
+          .eq('email', user.email)
+          .maybeSingle();
+
+        if (teamMember && (teamMember.is_admin || teamMember.role === 'Head of SES')) {
+          console.log('User is admin or head of SES (from team_members)');
+          return true;
+        }
+      } catch (teamError) {
+        console.log('Could not check team_members table:', teamError);
+      }
+
+      // Check if user exists in profiles with admin role
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin, role')
+          .eq('email', user.email)
+          .maybeSingle();
+
+        if (profile && (profile.is_admin || profile.role === 'Head of SES')) {
+          console.log('User is admin or head of SES (from profiles)');
+          return true;
+        }
+      } catch (profileError) {
+        console.log('Could not check profiles table:', profileError);
+      }
+
+      console.log('User is not admin or head of SES');
+      return false;
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      return false;
     }
   }
 }
