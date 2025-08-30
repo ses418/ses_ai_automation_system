@@ -24,7 +24,7 @@ export interface CampaignData {
   targetedIndustry: string[];
   emailGroup: string[];
   emailIds: string[];
-  frequency: string;
+  frequency: number;
 }
 
 export interface TimelineItem {

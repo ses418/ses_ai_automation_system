@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { LoadingProvider } from "@/contexts/LoadingContext";
 import { Layout } from "@/components/layout/Layout";
 import SignIn from "./pages/SignIn";
 import Dashboard from "./pages/Dashboard";
@@ -15,6 +16,7 @@ import Tasks from "./pages/Tasks";
 import DataManagement from "./pages/DataManagement";
 import Settings from "./pages/Settings";
 import ProposalMaker from "./pages/ProposalMaker";
+import Clients from "./pages/Clients";
 import NotFound from "./pages/NotFound";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -155,9 +157,10 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+        <LoadingProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
           <Routes>
             {/* Public Routes - No Layout */}
             <Route path="/signin" element={
@@ -190,6 +193,11 @@ const App = () => {
             <Route path="/linkedin-client-reactivation" element={
               <ProtectedRoute>
                 <Layout><LinkedInClientReactivation /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/clients" element={
+              <ProtectedRoute>
+                <Layout><Clients /></Layout>
               </ProtectedRoute>
             } />
             <Route path="/team" element={
@@ -225,6 +233,7 @@ const App = () => {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+          </LoadingProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

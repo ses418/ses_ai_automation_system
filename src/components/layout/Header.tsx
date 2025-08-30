@@ -89,7 +89,7 @@ export const Header = () => {
               alt="SES Logo" 
               className="w-20 h-20 object-contain"
             />
-            <h1 className="text-xl font-semibold text-primary-brand">Shiva Engineering Services</h1>
+            
           </div>
 
           {/* Center: Global Search */}

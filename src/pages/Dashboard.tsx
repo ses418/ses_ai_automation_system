@@ -88,10 +88,18 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMetric, setSelectedMetric] = useState('revenue');
   const [chartAnimation, setChartAnimation] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
 
   // Trigger animation on component mount
   useEffect(() => {
     setChartAnimation(true);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, 300);
+    return () => clearTimeout(timer);
   }, []);
 
   const getStatusColor = (status: string) => {
@@ -115,7 +123,10 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen page-bg-primary p-6">
+    <div className={`
+      min-h-screen page-bg-primary p-6 transition-all duration-700 ease-out
+      ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
+    `}>
       {/* Header */}
       <div className="moving-light-effect rounded-lg bg-white/5 backdrop-blur-sm shadow-lg header-container">
         <PageHeader

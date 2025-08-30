@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { DynamicQuickActions } from "./DynamicQuickActions";
@@ -12,11 +12,13 @@ interface LayoutProps {
 }
 
 export const Layout = ({ children }: LayoutProps) => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Start with sidebar collapsed by default
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [sidebarHovered, setSidebarHovered] = useState(false);
+  const [contentVisible, setContentVisible] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Handle sidebar hover with delay for closing
+  // Handle sidebar hover with improved timing
   const handleSidebarHover = (hovered: boolean) => {
     if (hovered) {
       // Clear any existing timeout when hovering
@@ -27,11 +29,20 @@ export const Layout = ({ children }: LayoutProps) => {
       setSidebarHovered(true);
     } else {
       // Add delay before closing to prevent accidental closing
+      // Reduced delay for more responsive experience
       hoverTimeoutRef.current = setTimeout(() => {
         setSidebarHovered(false);
-      }, 300); // 300ms delay
+      }, 200); // 200ms delay for more responsive experience
     }
   };
+
+  // Add entrance animation for content
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setContentVisible(true);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Determine if sidebar should be expanded (either manually expanded or hovered)
   const isSidebarExpanded = !sidebarCollapsed || sidebarHovered;
@@ -57,8 +68,10 @@ export const Layout = ({ children }: LayoutProps) => {
 
       <main
         className={cn(
-          "pt-16 transition-all duration-500 relative z-10",
-          isSidebarExpanded ? "ml-64" : "ml-16"
+          "pt-16 sidebar-transition relative z-10",
+          "transform-gpu", // Enable hardware acceleration
+          isSidebarExpanded ? "ml-64" : "ml-16",
+          contentVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
         )}
       >
         <div className="p-6">

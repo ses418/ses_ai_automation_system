@@ -34,9 +34,7 @@ const emailGroups = [
   "VIP Clients", "Enterprise", "SMB", "Startups", "Partners", "Prospects"
 ];
 
-const frequencies = [
-  "Now", "After 1 week", "After 2 weeks", "After 1 month", "Custom"
-];
+
 
 export default function Newsletter() {
   const [campaignData, setCampaignData] = useState<CampaignData>({
@@ -46,7 +44,7 @@ export default function Newsletter() {
     targetedIndustry: [],
     emailGroup: [],
     emailIds: [],
-    frequency: ""
+    frequency: 5
   });
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [allowedNewsletterTypes, setAllowedNewsletterTypes] = useState<string[]>([]);
@@ -150,17 +148,37 @@ export default function Newsletter() {
     setIsLoading(true);
     try {
       if (action === "approve") {
-        await approveNewsletter(newsletterId);
-        // Update local state
-        setNewsletters(prev => prev.map(n => 
-          n.newsletter_id.toString() === newsletterId 
-            ? { ...n, status: "sent", approval_status: "approved" }
-            : n
-        ));
-        toast({
-          title: "Newsletter Approved",
-          description: "The newsletter has been sent to Outlook.",
+        // Send POST request to the webhook URL with the correct payload
+        const response = await fetch("https://n8n.sesai.in/webhook/newsletter/approve", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ newsletter_id: newsletterId }),
         });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Handle the webhook response
+        if (data.status === "success") {
+          // Update local state for success
+          setNewsletters(prev => prev.map(n => 
+            n.newsletter_id.toString() === newsletterId 
+              ? { ...n, status: "sent", approval_status: "approved" }
+              : n
+          ));
+          
+          toast({
+            title: "Newsletter Approved Successfully",
+            description: data.message || "The newsletter has been sent successfully.",
+          });
+        } else {
+          throw new Error(data.message || "Unknown error occurred");
+        }
       } else if (action === "regenerate") {
         await regenerateNewsletter(newsletterId);
         toast({
@@ -172,6 +190,7 @@ export default function Newsletter() {
         throw new Error("Invalid action");
       }
     } catch (error) {
+      console.error(`Error ${action}ing newsletter:`, error);
       toast({
         title: "Error",
         description: `Failed to ${action} newsletter. Please try again.`,
@@ -185,20 +204,42 @@ export default function Newsletter() {
   const handleApproveNewsletter = async (newsletterId: number) => {
     setIsLoading(true);
     try {
-      await approveNewsletter(newsletterId.toString());
-      setNewsletters(prev => prev.map(n => 
-        n.newsletter_id === newsletterId 
-          ? { ...n, status: "sent", approval_status: "approved" }
-          : n
-      ));
-      toast({
-        title: "Newsletter Approved",
-        description: "The newsletter has been sent to Outlook.",
+      // Send POST request to the webhook URL with the correct payload
+      const response = await fetch("https://n8n.sesai.in/webhook/newsletter/approve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ newsletter_id: newsletterId.toString() }),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      // Handle the webhook response
+      if (data.status === "success") {
+        // Update local state for success
+        setNewsletters(prev => prev.map(n => 
+          n.newsletter_id === newsletterId 
+            ? { ...n, status: "sent", approval_status: "approved" }
+            : n
+        ));
+        
+        toast({
+          title: "Newsletter Approved Successfully",
+          description: data.message || "The newsletter has been sent successfully.",
+        });
+      } else {
+        throw new Error(data.message || "Unknown error occurred");
+      }
     } catch (error) {
+      console.error("Error approving newsletter:", error);
       toast({
         title: "Error",
-        description: `Failed to approve newsletter. Please try again.`,
+        description: "Failed to approve newsletter. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -453,7 +494,7 @@ export default function Newsletter() {
                           className="border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400 transition-all duration-300 transform hover:scale-105 hover:-rotate-1"
                         >
                           <Send className="h-4 w-4 mr-2" />
-                          Send
+                          Approve
                         </Button>
                         <Button
                           variant="outline"
@@ -541,17 +582,16 @@ export default function Newsletter() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="frequency">Frequency *</Label>
-                <Select value={campaignData.frequency} onValueChange={(value) => setCampaignData(prev => ({ ...prev, frequency: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select frequency" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {frequencies.map((freq) => (
-                      <SelectItem key={freq} value={freq}>{freq}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="frequency">Frequency (days) *</Label>
+                <Input
+                  id="frequency"
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={campaignData.frequency}
+                  onChange={(e) => setCampaignData(prev => ({ ...prev, frequency: parseInt(e.target.value) || 1 }))}
+                  placeholder="Enter frequency in days"
+                />
               </div>
             </div>
 
@@ -797,7 +837,18 @@ export default function Newsletter() {
                       className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all duration-300"
                     >
                       <Send className="h-4 w-4 mr-2" />
-                      Send to Outlook
+                      Approve
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        handleNewsletterAction("regenerate", previewNewsletter.newsletter_id.toString());
+                        setShowPreviewModal(false);
+                      }}
+                      disabled={isLoading}
+                      className="bg-orange-600 hover:bg-orange-700 text-white shadow-sm hover:shadow-md transition-all duration-300"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Regenerate
                     </Button>
                   </div>
                 </div>

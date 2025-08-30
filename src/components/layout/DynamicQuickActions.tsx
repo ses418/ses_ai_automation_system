@@ -30,7 +30,6 @@ const getQuickActionsByRoute = (pathname: string, navigate: (path: string) => vo
     case "/":
     default:
       return [
-        { icon: FileText, label: "Add Proposal", action: () => console.log("Add Proposal") },
         { icon: Users, label: "Manage Team", action: () => console.log("Manage Team") },
         { icon: BarChart3, label: "Performance", action: () => console.log("Performance") },
         { icon: Settings, label: "Quick Settings", action: () => console.log("Settings") },
